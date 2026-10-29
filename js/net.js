@@ -52,7 +52,34 @@ const NET = {
     if (!window.Peer) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'; s.onload = res; s.onerror = () => rej(new Error('PeerJS failed to load')); document.head.appendChild(s); });
     await new Promise((res, rej) => {
       const id = asHost ? 'skyisles-' + code : undefined;
-      this.peer = id ? new window.Peer(id) : new window.Peer();
+      const peerOptions = {
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.relay.metered.ca:80' },
+            {
+              urls: 'turn:global.relay.metered.ca:80',
+              username: 'dcfb26a0c29d8311f6ba9913',
+              credential: 'V/zEvt4Y9X21kpYb',
+            },
+            {
+              urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+              username: 'dcfb26a0c29d8311f6ba9913',
+              credential: 'V/zEvt4Y9X21kpYb',
+            },
+            {
+              urls: 'turn:global.relay.metered.ca:443',
+              username: 'dcfb26a0c29d8311f6ba9913',
+              credential: 'V/zEvt4Y9X21kpYb',
+            },
+            {
+              urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+              username: 'dcfb26a0c29d8311f6ba9913',
+              credential: 'V/zEvt4Y9X21kpYb',
+            },
+          ],
+        },
+      };
+      this.peer = id ? new window.Peer(id, peerOptions) : new window.Peer(peerOptions);
       const to = setTimeout(() => rej(new Error('timed out')), 12000);
       this.peer.on('error', e => { clearTimeout(to); rej(e); });
       this.peer.on('open', pid => {
