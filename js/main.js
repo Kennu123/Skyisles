@@ -79,6 +79,8 @@ window.addEventListener('keydown', e => {
   if (UI.dlg && k === 'escape') { UI.dlg = null; UI.renderDialog(); return; }
   if (k === 'escape') { if (!$('overlay').hidden) ACT.closeOv(); else if (UI.isOpen()) UI.close(); else UI.openMenu(); return; }
   if (!$('overlay').hidden && (k === 'enter' || k === ' ')) { ACT.closeOv(); return; }
+  if (k === ' ') { if (FX.cine) FX.skip(); else doJump(); e.preventDefault(); return; }
+  if (k === 'shift' && !e.repeat) { doRoll(); return; }
   if (k === 'e' || k === 'i') togglePanel('Inventory', UI.openInventory);
   else if (k === 'c') { if (UI.cur && UI.cur.title.includes('Craft') || UI.cur && UI.cur.title.includes('Workbench')) UI.close(); else UI.openCraft(); }
   else if (k === 'k') togglePanel('Skills & Collections', () => UI.openSkills());
@@ -86,6 +88,7 @@ window.addEventListener('keydown', e => {
   else if (k === 'm') togglePanel('Warp Map', UI.openMap);
   else if (k === 'h') togglePanel('Controls & Tips', UI.openHelp);
   else if (k === 'o') NET.openPanel();
+  else if (k === 'l') togglePanel('📜 Quest Log', () => UI.openQuests());
   else if (k === 'f') { if (UI.isOpen()) UI.close(); else interactNearest(); }
   else if (k === 'r') { G.placeDir = (G.placeDir + 1) % 4; SFX.pop(); }
   else if (k === 't' || k === 'enter') { $('chat').classList.add('typing'); setTimeout(() => $('chatin').focus(), 0); e.preventDefault(); }
@@ -103,6 +106,7 @@ function bindInput() {
     e.preventDefault(); if (document.activeElement && document.activeElement !== document.body && !UI.typing()) document.activeElement.blur();
     try { window.getSelection().removeAllRanges(); } catch (err) { }
     SFX.unlock(); if (!G.running) return;
+    if (FX.cine) { FX.skip(); return; }
     if (UI.isOpen() && e.button === 0) { UI.close(); return; }
     if (e.button === 0) { G.mouse.l = true; G.mouse.lEdge = true; }
     if (e.button === 2) { G.mouse.r = true; G.mouse.rEdge = true; }
@@ -128,7 +132,7 @@ function bindInput() {
   document.addEventListener('input', e => { if (e.target.id === 'craftQ') UI.refresh(); });
   $('hudBtns').addEventListener('click', e => {
     const b = e.target.closest('[data-k]'); if (!b) return;
-    ({ inv: () => togglePanel('Inventory', UI.openInventory), craft: () => UI.openCraft(), skills: () => togglePanel('Skills & Collections', () => UI.openSkills()), pets: () => togglePanel('Pets', UI.openPets), map: () => togglePanel('Warp Map', UI.openMap), coop: () => NET.openPanel(), menu: () => UI.openMenu() })[b.dataset.k]();
+    ({ inv: () => togglePanel('Inventory', UI.openInventory), craft: () => UI.openCraft(), skills: () => togglePanel('Skills & Collections', () => UI.openSkills()), pets: () => togglePanel('Pets', UI.openPets), map: () => togglePanel('Warp Map', UI.openMap), quests: () => togglePanel('📜 Quest Log', () => UI.openQuests()), coop: () => NET.openPanel(), menu: () => UI.openMenu() })[b.dataset.k]();
   });
   window.addEventListener('beforeunload', () => saveGame());
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
