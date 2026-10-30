@@ -101,7 +101,8 @@ function takeItems(list) { if (!hasItems(list)) return false; list.forEach(([id,
 function freeSlots() { return G.P.inv.filter(s => !s).length; }
 function held() { return G.P.inv[G.sel]; }
 function instRar(s) { return Math.min(5, ITEMS[s.id].rar + (s.d && s.d.rec ? 1 : 0)); }
-function instName(s) { const d = ITEMS[s.id]; let n = d.name; if (s.d && s.d.ref && gearKind(d)) { const g = REFORGE_GROUP[gearKind(d)]; n = REFORGES[g][s.d.ref].n + ' ' + n; } if (s.d && s.d.book) n = `Book: ${ENCHANTS[s.d.book].name} ${ROMAN[s.d.l]}`; if (s.d && s.d.tier) n += ' ' + ROMAN[s.d.tier]; return n; }
+function getRef(d, ref) { if (!ref) return null; if (ref.startsWith('cr_')) return CRYSTAL_REF[ref] || null; const g = REFORGES[REFORGE_GROUP[gearKind(d)]]; return (g && g[ref]) || null; }
+function instName(s) { const d = ITEMS[s.id]; let n = d.name; const rf = s.d && s.d.ref && gearKind(d) && getRef(d, s.d.ref); if (rf) n = rf.n + ' ' + n; if (s.d && s.d.book) n = `Book: ${ENCHANTS[s.d.book].name} ${ROMAN[s.d.l]}`; if (s.d && s.d.tier) n += ' ' + ROMAN[s.d.tier]; return n; }
 function instValue(s) {
   const d = ITEMS[s.id]; let v = d.price * (s.n || 1);
   if (s.d && s.d.ench) for (const e in s.d.ench) v += enchantCost(e, s.d.ench[e]).coins * 0.6;
@@ -115,12 +116,14 @@ function itemStats(s) {
   const d = ITEMS[s.id], out = Object.assign({}, d.stats || {});
   if (!s.d) return out;
   if (s.d.ref && gearKind(d)) {
-    const rf = REFORGES[REFORGE_GROUP[gearKind(d)]][s.d.ref], m = 1 + instRar(s) * 0.5;
-    for (const k in rf.st) { const key = k === 'fortune' ? fortuneKey(d.tool.kind) : k; out[key] = (out[key] || 0) + Math.round(rf.st[k] * m); }
+    const rf = getRef(d, s.d.ref), m = 1 + instRar(s) * 0.5;
+    if (rf) for (const k in rf.st) { const key = k === 'fortune' ? fortuneKey(d.tool ? d.tool.kind : '') : k; out[key] = (out[key] || 0) + Math.round(rf.st[k] * m); }
   }
   const e = s.d.ench || {};
   if (e.protection) out.defense = (out.defense || 0) + e.protection * 4;
   if (e.growth) out.health = (out.health || 0) + e.growth * 15;
+  if (e.wisdom) out.intelligence = (out.intelligence || 0) + e.wisdom * 15;
+  if (e.mana_flow) out.manaSave = (out.manaSave || 0) + e.mana_flow * 5;
   if (s.d.eng) out.breakPct = (out.breakPct || 0) + s.d.eng * 20;
   if (e.fortune) out.miningFortune = (out.miningFortune || 0) + e.fortune * 12;
   if (e.timber) out.foragingFortune = (out.foragingFortune || 0) + e.timber * 12;
@@ -197,6 +200,7 @@ function gainXP(skill, amt, x, y) {
   const ev = currentEvent();
   if (ev.active && ((ev.ev.id === 'timber' && skill === 'foraging') || (ev.ev.id === 'bloodmoon' && skill === 'combat'))) mult *= 2;
   const set = fullSet(); if (set && set[skill + 'Xp']) mult *= 1 + set[skill + 'Xp'] / 100;
+  if (skill === 'farming' && heldEnch().green_thumb) mult *= 1 + heldEnch().green_thumb * 0.08;
   amt = Math.round(amt * mult * 10) / 10;
   const sk = G.P.skills[skill];
   sk.xp += amt;
@@ -219,7 +223,7 @@ function unlocksAt(skill, l) {
 }
 function onLevelUp(skill, l) {
   SFX.level();
-  G.P.coins += levelCoins(l);
+  G.P.coins += levelCoins(l); FX.flash = 0.45; FX.flashCol = SKILLS[skill].col; FX.ring(G.me.x, G.me.y, 3, SKILLS[skill].col);
   UI.levelUp(skill, l, unlocksAt(skill, l));
   for (let i = 0; i < 40; i++) G.particles.push({ x: G.me.x, y: G.me.y - 0.5, vx: rand(-4, 4), vy: rand(-7, -2), life: rand(0.8, 1.6), max: 1.6, col: ['#ffd23a', '#5dff6a', '#5aa8ff', '#ff5ce1'][i % 4], size: rand(3, 6), grav: 9, sq: 1 });
   G.me.hp = G.stats.health;
@@ -271,12 +275,13 @@ function enterZone(z, from) {
     const pk = from === 'home' ? 'home' : from;
     for (let i = 0; i < z.objs.length; i++) { const o = z.objs[i]; if (o && o.k === 'portal' && o.to === pk) { const x = i % z.w + 0.5, y = Math.floor(i / z.w) + 0.5; const dx = z.spawn.x - x, dy = z.spawn.y - y, d = Math.hypot(dx, dy); me.x = x + dx / d * 2; me.y = y + dy / d * 2; break; } }
   }
-  me.portalCd = 1.2; me.fish = null; z.projs.length = 0; z.tele.length = 0;
+  me.portalCd = 1.2; me.fish = null; z.projs.length = 0; z.tele.length = 0; FX.fade = Math.max(FX.fade, 0.9); FX.wx = []; FX.ripples = []; FX.decals = [];
   G.cam.x = me.x; G.cam.y = me.y;
   G.P.visited[z.base] = 1;
   UI.zoneBanner(z);
   SFX.portal();
   NET.onZone();
+  questProgress('visit', z.base, 1);
   questCheck();
 }
 
@@ -297,7 +302,7 @@ function nearestFree(z, x, y, maxR = 6) {
 // ------------------------------------------------------- breaking & drops
 function actorInfo() {
   const t = heldTool() || {}, e = heldEnch(), s = G.stats;
-  return { kind: t.kind || null, tier: t.tier || 0, power: t.power || 1, sweep: t.sweep || 0, cleave: t.cleave || 0, eff: e.efficiency || 0, smelt: !!e.smelting, tele: !!e.telekinesis,
+  return { kind: t.kind || null, tier: t.tier || 0, power: t.power || 1, sweep: t.sweep || 0, cleave: t.cleave || 0, eff: e.efficiency || 0, smelt: !!e.smelting, tele: !!e.telekinesis, abund: e.abundance || 0, repl: e.replenish || 0,
     breakPct: s.breakPct - (e.efficiency || 0) * 15, fort: { foraging: s.foragingFortune, mining: s.miningFortune, farming: s.farmingFortune } };
 }
 function canBreak(o, a) {
@@ -340,17 +345,19 @@ function applyHit(z, x, y, a, owner) {
     if (o.hp > 0) return { res: 'hit', k: o.k, id: o.id };
     const skill = n.skill, items = rollDrops(n.drops, a.fort[skill], evMult(z, skill));
     if (a.smelt && o.k === 'rock') items.forEach(it => { const s = ITEMS[it[0]].smelt; if (s) it[0] = s; });
+    const triple = a.abund && items[0] && Math.random() < a.abund * 0.03; if (triple) items[0][1] *= 3;
     const xp = o.pl ? 0 : n.xp * (o.grown ? 0.5 : 1);
     if (z.isHome && !o.nat) z.set(x, y, null);
     else z.set(x, y, { k: o.k === 'tree' ? 'stump' : 'rubble', id: o.id, nat: o.nat, at: Date.now() + n.respawn * (z.isHome ? 2.5 : 1) * 1000 });
-    return { res: 'broken', k: o.k, id: o.id, items, xp: [[skill, xp]] };
+    return { res: 'broken', k: o.k, id: o.id, items, xp: [[skill, xp]], triple };
   }
   if (o.k === 'crop') {
     if (!cropRipe(z, o)) return { res: 'unripe', k: 'crop', id: o.id };
     const n = NODES['crop_' + o.id];
     const items = rollDrops(n.drops, a.fort.farming, evMult(z, 'farming'));
-    z.set(x, y, { k: 'crop', id: o.id, t0: Date.now(), pl: o.pl });
-    return { res: 'broken', k: 'crop', id: o.id, items, xp: [['farming', n.xp]] };
+    const triple = a.abund && items[0] && Math.random() < a.abund * 0.03; if (triple) items[0][1] *= 3;
+    z.set(x, y, { k: 'crop', id: o.id, t0: Date.now() - (o.pl && a.repl ? n.grow * 1000 * 0.1 * a.repl : 0), pl: o.pl });
+    return { res: 'broken', k: 'crop', id: o.id, items, xp: [['farming', n.xp]], triple };
   }
   if (!z.buildable || o.fixed) return null;
   // player-built things: return the item itself, never XP
@@ -424,7 +431,7 @@ function hitTile(x, y) {
     const r = applyHit(z, tx, ty, a, true); if (!r) continue;
     if (r.res === 'unripe') { if (tx === x && ty === y) floater(x + 0.5, y, 'Not ripe yet', '#ccc', 0.4); continue; }
     hitFx(tx, ty, r.k, r.id);
-    if (r.res === 'broken') { breakFx(tx, ty, r.k, r.id); grantReward(r, tx + 0.5, ty + 0.5, a.tele || r.built); onBroken(r, tx, ty); }
+    if (r.res === 'broken') { breakFx(tx, ty, r.k, r.id); grantReward(r, tx + 0.5, ty + 0.5, a.tele || r.built); onBroken(r, tx, ty); if (r.triple) floater(tx + 0.5, ty - 0.3, 'TRIPLE DROP!', '#ffd23a', 0.5); }
   }
 }
 let lastWarn = 0;
@@ -509,7 +516,7 @@ function calcDamage(type, base) {
 }
 function meleeSwing() {
   const me = G.me, z = G.zone, t = heldTool(), isSword = t && t.kind === 'sword';
-  me.cd = isSword ? 0.36 : 0.45; me.swing = 1;
+  me.cd = (isSword ? 0.36 : 0.45) * (1 - (heldEnch().haste || 0) * 0.06); me.swing = 1;
   const reach = isSword ? 2.2 : 1.6;
   let hit = false;
   for (const m of z.mobs) {
@@ -518,7 +525,7 @@ function meleeSwing() {
     if (d - m.r > reach) continue;
     if (Math.abs(angDiff(Math.atan2(dy, dx), me.dir)) > 1.15 && d > m.r + 0.6) continue;
     const { dmg, crit } = calcDamage('melee', isSword ? t.dmg : 0);
-    damageMob(z, m, dmg, crit, me.dir); hit = true;
+    damageMob(z, m, Math.round(dmg * hitMult(m)), crit, me.dir); hit = true;
     const ls = heldEnch().lifesteal; if (ls) me.hp = Math.min(G.stats.health, me.hp + G.stats.health * ls / 100);
   }
   if (hit) SFX.hit(); else if (isSword) SFX.shoot();
@@ -543,7 +550,7 @@ function castBolt() {
     let from = { x: me.x, y: me.y - 0.4 }, hits = new Set(), mult = 1;
     for (let k = 0; k < 4 && cur; k++) {
       z.bolts = z.bolts || []; z.bolts.push({ x1: from.x, y1: from.y, x2: cur.x, y2: cur.y - 0.3, life: 0.25, col });
-      hits.add(cur.id); damageMob(z, cur, Math.round(dmg * mult), false, Math.atan2(cur.y - from.y, cur.x - from.x));
+      hits.add(cur.id); damageMob(z, cur, Math.round(dmg * mult * hitMult(cur)), false, Math.atan2(cur.y - from.y, cur.x - from.x));
       from = { x: cur.x, y: cur.y - 0.3 }; mult *= 0.8;
       let nxt = null, nd = 3.8; for (const m of z.mobs) { if (m.dead || hits.has(m.id)) continue; const d = Math.hypot(m.x - from.x, m.y - from.y); if (d < nd) { nd = d; nxt = m; } }
       cur = nxt;
@@ -566,7 +573,8 @@ function damageMob(z, m, dmg, crit, ang) {
   m.kx = Math.cos(ang) * kb; m.ky = Math.sin(ang) * kb;
   floater(m.x + rand(-0.3, 0.3), m.y - m.r - 0.3, crit ? `✧${fmt(dmg)}✧` : fmt(dmg), crit ? '#ffd23a' : '#fff', crit ? 0.62 : 0.48, { crit });
   burst(m.x, m.y, m.def.col, crit ? 8 : 4, 3, 4);
-  if (crit) SFX.crit();
+  if (crit) { SFX.crit(); FX.stop(0.035); } else if (m.def.boss) FX.stop(0.015);
+  if (m.hp <= 0 && !m.def.boss) { FX.stop(0.05); FX.punch = Math.max(FX.punch, 0.4); }
   if (m.hp <= 0) killMob(z, m);
 }
 function killMob(z, m) {
@@ -587,8 +595,9 @@ function killMob(z, m) {
   addCoins(coins, m.x, m.y - 0.4);
   gainXP(def.skill || 'combat', def.xp * (m.xpScale || 1), m.x, m.y);
   G.P.stats.kills++; bountyProgress('kill', m.type);
+  const vamp = e.vampirism; if (vamp && !G.me.dead) G.me.hp = Math.min(G.stats.health, G.me.hp + (G.stats.health - G.me.hp) * 0.04 * vamp);
   if (def.boss) {
-    G.P.stats.bosses++; G.shake = 0.5; SFX.level();
+    G.P.stats.bosses++; FX.bossDeath(m); SFX.level();
     UI.announce(`${def.name} defeated!`, '#ffd23a');
     if (z.def.cat === 'dungeon') dungeonBossDown(z, m);
   }
@@ -599,6 +608,7 @@ function hurtPlayer(dmg, src) {
   const me = G.me; if (me.dead || me.iframes > 0) return;
   const d = Math.max(1, Math.round(dmg * 100 / (100 + G.stats.defense)));
   me.hp -= d; me.hurtT = 0.35; me.iframes = 0.3; me.lastHit = G.t;
+  const th = armorEnch('thorns'); if (th && src && src.def && !src.dead && G.zone.mobs.includes(src)) damageMob(G.zone, src, Math.max(1, Math.round(dmg * th * 0.03)), false, 0);
   floater(me.x + rand(-0.2, 0.2), me.y - 0.9, '-' + d, '#ff4a4a', 0.5);
   G.shake = Math.max(G.shake, 0.12); SFX.hurt();
   if (src) { const a = Math.atan2(me.y - src.y, me.x - src.x); me.kx = Math.cos(a) * 6; me.ky = Math.sin(a) * 6; }
@@ -623,7 +633,7 @@ function spawnMob(z, type, x, y, o = {}) {
   const def = MOBS[type], sc = o.scale || 1, dsc = o.dscale || 1;
   const m = { id: z.mobId++, type, def, x, y, hx: x, hy: y, hp: def.hp * sc, mhp: def.hp * sc, dmg: def.dmg * dsc, r: def.r, atkCd: 1, bt: 2.5, wt: 0, wx: 0, wy: 0, kx: 0, ky: 0, flash: 0, aggro: !!o.aggro, scale: o.loot || 1, xpScale: o.xpScale || 1, room: o.room || null, area: o.area || null, walkT: Math.random() * 10, extra: !!o.extra, trail: [], phase: 0 };
   z.mobs.push(m);
-  if (def.boss) { UI.announce(`⚠ ${def.name} has appeared!`, '#ff5a5a', z.def.cat === 'dungeon' ? 'Defeat it to claim your loot.' : 'Defeat it for a chance at rare loot.'); SFX.boss(); G.shake = 0.4; }
+  if (def.boss) { if (z === G.zone) FX.bossIntro(m); else SFX.boss(); }
   burst(x, y, '#2a2a2a', 10, 2, 4, 2);
   return m;
 }
@@ -668,7 +678,8 @@ function updateMobs(z, dt) {
     if (def.ranged && m.aggro && pd < def.ranged.range && m.atkCd <= 0 && !def.boss) {
       m.atkCd = def.ranged.cd * rand(0.8, 1.2);
       const a = Math.atan2(dy, dx);
-      z.projs.push({ x: m.x, y: m.y, vx: Math.cos(a) * def.ranged.spd, vy: Math.sin(a) * def.ranged.spd, from: 'm', dmg: m.dmg, r: 0.2, life: 2, kind: 'orb', col: def.ranged.col });
+      z.projs.push({ x: m.x, y: m.y - 0.2, vx: Math.cos(a) * def.ranged.spd, vy: Math.sin(a) * def.ranged.spd, from: 'm', dmg: m.dmg, r: 0.2, life: 2, kind: def.ranged.kind || 'orb', col: def.ranged.col });
+      m.lunge = 0.25; if (def.ranged.kind === 'arrow') SFX.shoot();
     }
     if (def.teleport && m.aggro && Math.random() < dt * 0.25 && pd < 12) {
       const a = Math.random() * 7, p = nearestFree(z, me.x + Math.cos(a) * 2, me.y + Math.sin(a) * 2, 2);
@@ -686,7 +697,7 @@ function bossAI(z, m, dt, pd, dx, dy) {
   m.bt = (m.phase ? 2.3 : 3.2) * rand(0.85, 1.15);
   const atk = m.def.attacks[randi(0, m.def.attacks.length - 1)];
   const a = Math.atan2(dy, dx), col = m.def.col2 || '#ff4a4a';
-  if (atk === 'slam') { z.tele.push({ type: 'circle', x: m.x, y: m.y, r: 3.2 + m.r, t: 0, dur: 1.0, dmg: m.dmg * 1.6, src: m }); m.stun = 1.1; }
+  if (atk === 'slam') { z.tele.push({ type: 'circle', x: m.x, y: m.y, r: 3.2 + m.r, t: 0, dur: 1.0, dmg: m.dmg * 1.6, src: m }); m.stun = 1.1; FX.hint('jump', 'Jump over slams with Space'); }
   else if (atk === 'ring') {
     const waves = m.phase ? 2 : 1;
     for (let w = 0; w < waves; w++) setTimeout(() => { if (m.dead || G.zone !== z) return; for (let i = 0; i < 16; i++) { const b = i / 16 * Math.PI * 2 + w * 0.2; z.projs.push({ x: m.x, y: m.y, vx: Math.cos(b) * 6, vy: Math.sin(b) * 6, from: 'm', dmg: m.dmg * 0.7, r: 0.25, life: 3, kind: 'orb', col }); } SFX.zap(); }, w * 450);
@@ -701,6 +712,19 @@ function bossAI(z, m, dt, pd, dx, dy) {
     if (alive < 6) for (let i = 0; i < 3; i++) { const p = nearestFree(z, m.x + rand(-2, 2), m.y + rand(-2, 2), 3); spawnMob(z, m.def.summon, p.x, p.y, { aggro: true, extra: true, scale: m.minionScale || 1, dscale: m.minionDscale || 1, room: m.room }); }
     burst(m.x, m.y, '#3a3a3a', 20, 4, 5);
   }
+  else if (atk === 'shock') {
+    // ground shockwave: an expanding ring you must jump over
+    m.stun = 0.9; burst(m.x, m.y, '#c9a070', 30, 5, 6); G.shake = Math.max(G.shake, 0.35); SFX.boss();
+    const waves = m.phase ? 2 : 1;
+    for (let w = 0; w < waves; w++) z.tele.push({ type: 'shock', x: m.x, y: m.y, r: 0.6 - w * 2.2, t: 0, dur: 2.2 + w * 0.6, max: 10, spd: 5.2, dmg: m.dmg * 1.3, src: m, hit: false, col: col });
+    FX.hint('jump', 'Shockwave! Jump with Space');
+  }
+  else if (atk === 'meteor') {
+    // falling rocks: roll out of the marked circles
+    const n = m.phase ? 7 : 5;
+    for (let i = 0; i < n; i++) { const a2 = Math.random() * 7, d2 = i === 0 ? 0 : rand(1.2, 4.5); z.tele.push({ type: 'meteor', x: G.me.x + Math.cos(a2) * d2, y: G.me.y + Math.sin(a2) * d2, r: 1.25, t: -i * 0.18, dur: 1.3, dmg: m.dmg * 1.5, src: m, col }); }
+    FX.hint('roll', 'Meteors! Roll away with Shift');
+  }
   else if (atk === 'spit') {
     for (let i = -2; i <= 2; i++) { const b = a + i * 0.18; z.projs.push({ x: m.x, y: m.y, vx: Math.cos(b) * 9, vy: Math.sin(b) * 9, from: 'm', dmg: m.dmg * 0.8, r: 0.25, life: 2.5, kind: 'orb', col }); }
     SFX.shoot();
@@ -710,9 +734,25 @@ function updateTele(z, dt) {
   const me = G.me;
   for (const t of z.tele) {
     t.t += dt;
+    if (t.type === 'shock') {
+      t.r += t.spd * dt;
+      if (t.r > t.max) { t.done = true; continue; }
+      const d = Math.hypot(me.x - t.x, me.y - t.y);
+      if (!t.hit && t.r > 0 && Math.abs(d - t.r) < 0.45) { t.hit = true; if (me.z > 0.25 || me.roll) floater(me.x, me.y - 1.2, 'Dodged!', '#9aff8a', 0.45); else hurtPlayer(t.dmg, t.src); }
+      if (t.r > 0 && Math.random() < 0.5) { const a = Math.random() * 7; G.particles.push({ x: t.x + Math.cos(a) * t.r, y: t.y + Math.sin(a) * t.r * 0.7, vx: 0, vy: -2, life: 0.4, max: 0.4, col: '#c9a070', size: 5, grav: 4 }); }
+      continue;
+    }
     if (t.t >= t.dur && !t.done) {
       t.done = true;
-      if (t.type === 'circle') { if (Math.hypot(me.x - t.x, me.y - t.y) < t.r) hurtPlayer(t.dmg, t.src); burst(t.x, t.y, '#c9a070', 40, 6, 6); G.shake = Math.max(G.shake, 0.3); SFX.hit(); }
+      if (t.type === 'circle') {
+        if (Math.hypot(me.x - t.x, me.y - t.y) < t.r) { if (me.z > 0.3) floater(me.x, me.y - 1.2, 'Dodged!', '#9aff8a', 0.45); else hurtPlayer(t.dmg, t.src); }
+        burst(t.x, t.y, '#c9a070', 40, 6, 6); FX.ring(t.x, t.y, t.r, '#ffd27a'); FX.crater(t.x, t.y, 1.4); G.shake = Math.max(G.shake, 0.4); SFX.hit();
+      }
+      if (t.type === 'meteor') {
+        if (Math.hypot(me.x - t.x, me.y - t.y) < t.r + 0.3) hurtPlayer(t.dmg, t.src);
+        burst(t.x, t.y, '#ff8a3a', 30, 6, 6, 3); burst(t.x, t.y, '#3a2a24', 16, 4, 5, 3); FX.crater(t.x, t.y, t.r); G.shake = Math.max(G.shake, 0.3); SFX.hit();
+        if (GROUND[G.zone.g(Math.floor(t.x), Math.floor(t.y))].water) FX.ripple(t.x, t.y, true);
+      }
       if (t.then) t.then();
     }
   }
@@ -729,7 +769,7 @@ function updateProjs(z, dt) {
       for (const m of z.mobs) {
         if (m.dead || (p.hit && p.hit.has(m.id))) continue;
         if (Math.hypot(m.x - p.x, m.y - p.y) < m.r + p.r) {
-          damageMob(z, m, p.dmg, p.crit, Math.atan2(p.vy, p.vx));
+          damageMob(z, m, Math.round(p.dmg * hitMult(m)), p.crit, Math.atan2(p.vy, p.vx));
           if (p.ab === 'frost') { m.slow = 3; burst(m.x, m.y, '#bff4ff', 8, 2, 4); }
           if (p.ab === 'boom') { explode(z, p.x, p.y, p.dmg, p.col); p.life = 0; p.boomed = 1; break; }
           if (p.pierce) { p.hit.add(m.id); if (--p.pierce <= 0) p.life = 0; } else p.life = 0;
@@ -878,6 +918,7 @@ function fishClick() {
     if (!GROUND[z.g(tx, ty)].water) return warn('Aim at water to cast');
     if (Math.hypot(tx + 0.5 - me.x, ty + 0.5 - me.y) > 8) return warn('Too far to cast');
     me.fish = { x: tx + 0.5, y: ty + 0.5, sx: me.x, sy: me.y, state: 'fly', t: 0 };
+    setTimeout(() => { if (G.me.fish) FX.ripple(tx + 0.5, ty + 0.5, true); }, 350);
     me.swing = 1; SFX.shoot(); return;
   }
   if (me.fish.state === 'bite') catchFish();
@@ -898,7 +939,7 @@ function updateFishing(dt) {
 }
 function catchFish() {
   const me = G.me, f = me.fish, z = G.zone, fl = lvl('fishing'), t = heldTool();
-  me.fish = null; me.swing = 1; SFX.splash();
+  me.fish = null; me.swing = 1; SFX.splash(); FX.ripple(f.x, f.y, true); FX.ripple(f.x, f.y, false);
   const atoll = z.base === 'fishing1', fs = fullSet(), sea = (0.05 + fl * 0.003) * (fs && (fs.id === 'angler' || fs.id === 'coral') ? 2 : 1) * (atoll ? 1.5 : 1);
   if (Math.random() < sea && z.def.cat !== 'hub') {
     let type = 'squid';
@@ -920,7 +961,7 @@ function catchFish() {
     item = pickW(pool.filter(p => p[1] > 0), Math.random);
     xp = { raw_cod: 6, raw_salmon: 10, pufferfish: 15, shrimp: 22, prismarine: 18, coral_snapper: 26, glowfish: 60 }[item];
     bountyProgress('fish', item, n);
-    if (Math.random() < G.stats.fishingSpeed / 400) n = 2;
+    if (Math.random() < G.stats.fishingSpeed / 400 + (heldEnch().magnet || 0) * 0.1) n = 2;
   }
   const d = item === 'ench_book' ? randomBook(0) : null;
   z.drops.push({ id: item, n, d, x: f.x, y: f.y, h: 0.5, vh: 6, vx: (me.x - f.x) * 1.2, vy: (me.y - f.y) * 1.2, t: 0, coll: true });
@@ -1141,8 +1182,19 @@ function questCheck() {
 }
 
 // ---------------------------------------------------------------- update
-function update(dt) {
+// cutscene frames: the world holds still while the camera and effects play
+function updateCine(dt) {
+  const tgt = FX.camTarget() || G.me;
+  G.cam.x += (tgt.x - G.cam.x) * Math.min(1, dt * 6); G.cam.y += (tgt.y - G.cam.y) * Math.min(1, dt * 6);
+  for (const p of G.particles) { p.life -= dt; p.vy += (p.grav || 0) * dt; p.x += p.vx * dt / 3; p.y += p.vy * dt / 3; }
+  G.particles = G.particles.filter(p => p.life > 0);
+  G.shake = Math.max(0, G.shake - dt);
+  G.mouse.lEdge = G.mouse.rEdge = false;
+}
+function update(rawDt) {
   const me = G.me, z = G.zone, P = G.P;
+  const dt = FX.step(rawDt); FX.update(rawDt);
+  if (FX.frozen()) { updateCine(rawDt); NET.tick(rawDt); return; }
   G.t += dt;
   G.stats = computeStats();
   const maxHp = G.stats.health, maxMana = 100 + G.stats.intelligence;
@@ -1151,25 +1203,42 @@ function update(dt) {
   let mx = 0, my = 0; const k = G.keys;
   if (!UI.typing()) { if (k.w || k.arrowup) my--; if (k.s || k.arrowdown) my++; if (k.a || k.arrowleft) mx--; if (k.d || k.arrowright) mx++; }
   const len = Math.hypot(mx, my); if (len) { mx /= len; my /= len; }
+  me.mx = mx; me.my = my;
   const spd = 4.3 * G.stats.speed / 100;
   const ox = me.x, oy = me.y;
-  moveEnt(z, me, (mx * spd + me.kx) * dt, (my * spd + me.ky) * dt, 0.28);
+  if (me.roll) {
+    // dodge roll / dash: fast burst with invulnerability, leaves afterimages
+    const r = me.roll; r.t -= dt; const k2 = Math.max(0, r.t / r.dur);
+    moveEnt(z, me, r.dx * r.spd * (0.35 + k2) * dt, r.dy * r.spd * (0.35 + k2) * dt, 0.28);
+    me.iframes = Math.max(me.iframes, 0.06);
+    (me.ghosts = me.ghosts || []).push({ x: me.x, y: me.y, life: 0.25 });
+    if (r.hit) for (const m of z.mobs) if (!m.dead && !r.hit.has(m.id) && Math.hypot(m.x - me.x, m.y - me.y) < m.r + 1) { r.hit.add(m.id); damageMob(z, m, Math.round(r.dmg * hitMult(m)), r.crit, Math.atan2(r.dy, r.dx)); burst(m.x, m.y, '#fff', 8, 3, 4); }
+    if (r.t <= 0) me.roll = null;
+  } else moveEnt(z, me, (mx * spd + me.kx) * dt, (my * spd + me.ky) * dt, 0.28);
+  if (me.ghosts) { for (const g of me.ghosts) g.life -= dt; me.ghosts = me.ghosts.filter(g => g.life > 0); }
+  // jumping
+  if (me.z > 0 || me.vz > 0) {
+    me.vz -= 26 * dt; me.z = Math.max(0, me.z + me.vz * dt);
+    if (me.z <= 0) { me.vz = 0; burst(me.x, me.y + 0.25, '#d8c8a8', 8, 2, 4, 2); SFX.place(); }
+  }
+  me.jumpCd -= dt; me.rollCd -= dt; me.abCd -= dt;
   me.kx *= Math.pow(0.001, dt); me.ky *= Math.pow(0.001, dt);
   const moved = Math.hypot(me.x - ox, me.y - oy);
   me.walked += moved; me.moving = moved > 0.001; if (me.moving) me.walkT += dt * 9;
+  if (me.moving && me.z <= 0 && !me.roll && (me.stepT = (me.stepT || 0) - dt) <= 0) { me.stepT = 0.3; const g = GROUND[z.g(Math.floor(me.x), Math.floor(me.y))]; G.particles.push({ x: me.x + rand(-0.1, 0.1), y: me.y + 0.28, vx: rand(-0.4, 0.4), vy: -0.6, life: 0.45, max: 0.45, col: shade(g.c, 0.25), size: 5, grav: 0 }); }
   me.dir = Math.atan2(G.mouse.wy - me.y, G.mouse.wx - me.x);
   me.cd -= dt; me.swing = Math.max(0, me.swing - dt * 3.5); me.hurtT -= dt; me.iframes -= dt; me.portalCd -= dt;
   // regen
   const ooc = G.t - (me.lastHit || -99) > 4;
   const fsb = fullSet();
-  me.hp = Math.min(maxHp, me.hp + maxHp * ((ooc ? 0.025 : 0.006) + (fsb && fsb.id === 'bog' ? 0.02 : 0)) * dt);
+  me.hp = Math.min(maxHp, me.hp + maxHp * ((ooc ? 0.025 : 0.006) + (fsb && fsb.id === 'bog' ? 0.02 : 0) + armorEnch('rejuvenate') * 0.003) * dt);
   // tutorial pointer
   const ts = P.tut < TUTORIAL.length && TUTORIAL[P.tut];
   G.tutTarget = ts && ts.target ? ((G.tutT = (G.tutT || 0) - dt) <= 0 ? (G.tutT = 0.5, G.tutCache = ts.target() || null) : G.tutCache) : null;
   me.mana = Math.min(maxMana, me.mana + maxMana * 0.04 * dt);
   // actions
   const mouse = G.mouse;
-  if (!mouse.overUI && !me.dead) {
+  if (!mouse.overUI && !me.dead && !me.roll) {
     const t = heldTool();
     if (t && t.kind === 'rod') { if (mouse.lEdge) fishClick(); }
     else if (mouse.l && me.cd <= 0) primaryAction();
@@ -1195,7 +1264,9 @@ function update(dt) {
   for (const o of z.objs) if (o && o.shake) { o.shake = Math.max(0, o.shake - dt * 5); }
   G.shake = Math.max(0, G.shake - dt);
   // camera
-  G.cam.x += (me.x - G.cam.x) * Math.min(1, dt * 8); G.cam.y += (me.y - G.cam.y) * Math.min(1, dt * 8);
+  // camera leads slightly toward where you aim
+  const lead = 0.6, tx = me.x + Math.cos(me.dir) * lead, ty = me.y + Math.sin(me.dir) * lead * 0.7;
+  G.cam.x += (tx - G.cam.x) * Math.min(1, rawDt * 7); G.cam.y += (ty - G.cam.y) * Math.min(1, rawDt * 7);
   // bank interest: 1% per real hour, paid continuously, capped
   if (P.bank > 0) P.bank += P.bank * 0.01 * dt / 3600;
   BZ.tick(dt); AH.tick(dt);
@@ -1220,6 +1291,7 @@ function secondaryAction() {
   const tx = Math.floor(G.mouse.wx), ty = Math.floor(G.mouse.wy), o = z.o(tx, ty);
   const dist = Math.hypot(tx + 0.5 - me.x, ty + 0.5 - me.y);
   if (o && dist <= REACH + 0.6 && interactObj(o, tx, ty)) return;
+  if (d && d.tool && ['sword', 'bow', 'wand'].includes(d.tool.kind) && heldTool()) return weaponAbility(heldTool());
   if (d && (d.food || d.mana)) return eat();
   if (d && d.egg) return hatchEgg(G.sel);
   if (d && d.armor) return equipArmor(G.sel);
@@ -1295,7 +1367,7 @@ function startGame(P) {
   G.zones = {}; G.particles = []; G.floaters = [];
   BZ.load(P.bz); AH.load(P.ah);
   SFX.enabled = P.sound !== false;
-  G.me = { x: 0, y: 0, dir: 0, hp: 100, mana: 100, maxHp: 100, maxMana: 100, cd: 0, swing: 0, walkT: 0, walked: 0, kx: 0, ky: 0, hurtT: 0, iframes: 0, portalCd: 0, fish: null };
+  G.me = { z: 0, vz: 0, jumpCd: 0, rollCd: 0, abCd: 0, abMax: 1, x: 0, y: 0, dir: 0, hp: 100, mana: 100, maxHp: 100, maxMana: 100, cd: 0, swing: 0, walkT: 0, walked: 0, kx: 0, ky: 0, hurtT: 0, iframes: 0, portalCd: 0, fish: null };
   const hz = getZone(homeKey());
   if (P.lastSeen && Date.now() - P.lastSeen > 60000) {
     const mins = Math.floor((Date.now() - P.lastSeen) / 60000);
@@ -1305,7 +1377,9 @@ function startGame(P) {
   G.stats = computeStats(); G.me.hp = G.stats.health; G.me.mana = 100 + G.stats.intelligence;
   G.invDirty = true; G.running = true; bounties();
   UI.startHud(); questCheck(); saveGame();
-  if (G.P.tut === 0) setTimeout(() => { if (G.P && G.P.tut === 0) UI.say('guide', TUTORIAL[0].say); }, 900);
+  let introDelay = 900;
+  if (G.P.tut === 0 && !G.P.flags.intro) { G.P.flags.intro = 1; FX.intro(); introDelay = 5600; }
+  if (G.P.tut === 0) setTimeout(() => { if (G.P && G.P.tut === 0) UI.say('guide', TUTORIAL[0].say); }, introDelay);
 }
 
 // ----------------------------------------------------------- bounties
@@ -1330,6 +1404,7 @@ function genBounties() {
 }
 function bounties() { const P = G.P; if (!P.bounty || P.bounty.hour !== bountyHour()) P.bounty = { hour: bountyHour(), list: genBounties() }; return P.bounty.list; }
 function bountyProgress(type, target, n = 1) {
+  questProgress(type, target, n);
   if (!G.P || !G.P.bounty) return;
   for (const b of G.P.bounty.list) {
     if (b.done || b.type !== type || (b.target !== 'any' && b.target !== target)) continue;
@@ -1341,4 +1416,145 @@ function claimBounty(k) {
   const b = G.P.bounty.list[k]; if (!b || !b.done || b.claimed) return;
   b.claimed = true; addCoins(b.coins, G.me.x, G.me.y); gainXP(b.skill, Math.round(b.xp), G.me.x, G.me.y);
   if (Math.random() < 0.1) { addItem('egg_common', 1); UI.toast('Bonus reward: a Pet Egg!', '#ffd23a'); }
+}
+// ------------------------------------------------------ enchant helpers
+function hitMult(m) {
+  const e = heldEnch(); let k = 1;
+  if (e.first_strike && m.hp >= m.mhp) k *= 1 + e.first_strike * 0.25;
+  if (e.giant_killer && m.def.boss) k *= 1 + e.giant_killer * 0.06;
+  return k;
+}
+function armorEnch(id) { let n = 0; for (const sl of ARMOR_SLOTS) { const a = G.P.armor[sl]; if (a && a.d && a.d.ench && usable(a)) n += a.d.ench[id] || 0; } return n; }
+
+// --------------------------------------------------------------- quests
+function qState(id) { const P = G.P; P.quests = P.quests || {}; return P.quests[id] || (P.quests[id] = { i: 0, active: false, prog: 0, rep: 0 }); }
+// the quest this giver offers now (story first, then the repeatable job), or null while on cooldown
+function qCurrent(id) {
+  const g = QUESTGIVERS[id], st = qState(id);
+  if (st.i < g.q.length) return { q: g.q[st.i], repeat: false };
+  if (st.active || Date.now() >= st.rep) return { q: g.rep, repeat: true };
+  return null;
+}
+function qDone(id) {
+  const st = qState(id), cur = qCurrent(id); if (!cur || !st.active) return false;
+  const [type, target, n] = cur.q;
+  if (type === 'level') return lvl(target) >= n;
+  if (type === 'deliver') return countItem(target) >= n;
+  return st.prog >= n;
+}
+function qProgText(id) {
+  const st = qState(id), cur = qCurrent(id); if (!cur) return '';
+  const [type, target, n] = cur.q;
+  const have = type === 'level' ? lvl(target) : type === 'deliver' ? countItem(target) : st.prog;
+  return `${fmt(Math.min(have, n))} / ${fmt(n)}`;
+}
+function qTitle(q) {
+  const [type, target, n] = q;
+  const nm = t => (ITEMS[t] && ITEMS[t].name) || (MOBS[t] && MOBS[t].name) || (ZONES[t] && ZONES[t].name) || (SKILLS[t] && SKILLS[t].name) || t;
+  return { kill: `Defeat ${n} ${nm(target)}`, gather: `Gather ${n} ${nm(target)}`, fish: `Catch ${n} fish`, craft: `Craft ${n > 1 ? n + ' ' : 'a '}${nm(target)}`, level: `Reach ${nm(target)} ${n}`, visit: `Travel to ${nm(target)}`, deliver: `Bring ${n} ${nm(target)}` }[type];
+}
+function qMark(id) {
+  if (!QUESTGIVERS[id]) return null;
+  const st = qState(id), cur = qCurrent(id);
+  if (!cur) return null;
+  if (st.active) return qDone(id) ? '?' : '…';
+  return '!';
+}
+function acceptQuest(id) {
+  const st = qState(id); st.active = true; st.prog = 0;
+  const cur = qCurrent(id); if (cur && cur.q[0] === 'visit' && G.zone.base === cur.q[1]) st.prog = 1;
+  SFX.craft(); UI.toast(`📜 Quest accepted: <b>${esc(qTitle(cur.q))}</b>`, '#ffd23a'); questCheck();
+}
+function turnInQuest(id) {
+  const g = QUESTGIVERS[id], st = qState(id), cur = qCurrent(id);
+  if (!cur || !qDone(id)) return false;
+  const [type, target, n, , rw] = cur.q;
+  if (type === 'deliver' && !removeItem(target, n)) return false;
+  if (rw.c) addCoins(rw.c, G.me.x, G.me.y);
+  if (rw.x) gainXP(rw.x[0], rw.x[1], G.me.x, G.me.y);
+  for (const [iid, c] of (rw.i || [])) { const left = addItem(iid, c); if (left) spawnDrop(G.zone, G.me.x, G.me.y, iid, left); if (ITEMS[iid].rar >= 2) UI.rareDrop(iid); }
+  st.active = false; st.prog = 0;
+  if (cur.repeat) st.rep = Date.now() + g.cd * 60000; else st.i++;
+  G.P.stats.quests = (G.P.stats.quests || 0) + 1;
+  SFX.level(); burst(G.me.x, G.me.y - 0.5, '#ffd23a', 30, 4, 5);
+  UI.announce('Quest complete!', '#ffd23a', esc(qTitle(cur.q)));
+  questCheck(); return true;
+}
+function questProgress(type, target, n = 1) {
+  if (!G.P || !G.P.quests) return;
+  for (const id in QUESTGIVERS) {
+    const st = G.P.quests[id]; if (!st || !st.active) continue;
+    const cur = qCurrent(id); if (!cur) continue;
+    const [qt, tg, need] = cur.q;
+    if (qt !== type || (tg !== 'any' && tg !== target) || st.prog >= need) continue;
+    st.prog = Math.min(need, st.prog + n);
+    if (st.prog >= need) { UI.toast(`✔ <b>${esc(qTitle(cur.q))}</b> done! Return to ${esc(QUESTGIVERS[id].name)}.`, '#5dff6a'); SFX.pop(); }
+  }
+}
+function activeQuests() { const out = []; for (const id in QUESTGIVERS) { const st = G.P.quests && G.P.quests[id]; if (st && st.active) { const cur = qCurrent(id); if (cur) out.push({ id, q: cur.q, done: qDone(id) }); } } return out; }
+
+// --------------------------------------------------------- black market
+// stock rotates every 20 minutes and is the same for everyone; sometimes Silas isn't around
+const BM_WINDOW = 20 * 60000;
+function bmStock() {
+  const win = Math.floor(Date.now() / BM_WINDOW), rnd = mulberry(win * 7919 + 13);
+  if (rnd() < 0.25) return { win, closed: true, offers: [] };
+  const pool = BLACK_MARKET.slice(), offers = [];
+  for (let k = 0; k < 4 && pool.length; k++) {
+    const total = pool.reduce((a, p) => a + p[3], 0); let r = rnd() * total, idx = 0;
+    for (; idx < pool.length; idx++) { if ((r -= pool[idx][3]) <= 0) break; }
+    const [id, lo, hi] = pool.splice(Math.min(idx, pool.length - 1), 1)[0];
+    offers.push({ id, price: Math.round((lo + rnd() * (hi - lo)) / 50) * 50, qty: ITEMS[id].unique ? 1 : 1 + Math.floor(rnd() * 3) });
+  }
+  return { win, closed: false, offers };
+}
+function bmBought(win, id) { const b = G.P.bm; return b && b.win === win ? (b.bought[id] || 0) : 0; }
+function bmBuy(id) {
+  const s = bmStock(), o = s.offers.find(x => x.id === id); if (!o) return 'Sold out';
+  if (bmBought(s.win, id) >= o.qty) return 'Sold out';
+  if (G.P.coins < o.price) return 'Not enough coins';
+  if (freeSlots() < 1 && !canStack(id)) return 'Inventory full';
+  G.P.coins -= o.price; addItem(id, 1);
+  if (!G.P.bm || G.P.bm.win !== s.win) G.P.bm = { win: s.win, bought: {} };
+  G.P.bm.bought[id] = (G.P.bm.bought[id] || 0) + 1; SFX.coin(); return null;
+}
+// -------------------------------------------------------- moves & abilities
+function doJump() {
+  const me = G.me; if (!me || me.dead || me.z > 0 || me.jumpCd > 0 || me.roll || FX.frozen()) return;
+  me.vz = 7.6; me.jumpCd = 0.2; SFX.pop(); burst(me.x, me.y + 0.25, '#d8c8a8', 6, 1.5, 3, 2);
+}
+function doRoll() {
+  const me = G.me; if (!me || me.dead || me.roll || me.rollCd > 0 || FX.frozen()) return;
+  let dx = me.mx || 0, dy = me.my || 0;
+  if (!dx && !dy) { dx = Math.cos(me.dir); dy = Math.sin(me.dir); }
+  me.roll = { t: 0.32, dur: 0.32, dx, dy, spd: 13 }; me.rollCd = 0.9; me.iframes = 0.36; me.fish = null;
+  SFX.shoot(); burst(me.x, me.y + 0.2, '#e8e0d0', 10, 2, 4, 2);
+}
+const ABILITY = {
+  sword: { name: 'Dash Strike', cd: 4, icon: '⚔️', desc: 'Dash forward and slash everything in your path' },
+  bow: { name: 'Arrow Volley', cd: 5, icon: '🏹', desc: 'Fire a fan of seven arrows' },
+  wand: { name: 'Arcane Nova', cd: 6, icon: '✨', desc: 'Blast every foe around you (costs mana)' },
+};
+function weaponAbility(t) {
+  const me = G.me, z = G.zone, A = ABILITY[t.kind]; if (!A) return;
+  if (me.abCd > 0) return warn(`${A.name} ready in ${me.abCd.toFixed(1)}s`);
+  if (t.kind === 'sword') {
+    const { dmg, crit } = calcDamage('melee', t.dmg);
+    me.roll = { t: 0.26, dur: 0.26, dx: Math.cos(me.dir), dy: Math.sin(me.dir), spd: 17, hit: new Set(), dmg: dmg * 2, crit };
+    me.iframes = 0.3; me.swing = 1; FX.punch = 0.6; SFX.crit();
+  } else if (t.kind === 'bow') {
+    const { dmg, crit } = calcDamage('bow', t.dmg);
+    for (let i = -3; i <= 3; i++) { const a = me.dir + i * 0.12; z.projs.push({ x: me.x + Math.cos(a) * 0.5, y: me.y + Math.sin(a) * 0.5, vx: Math.cos(a) * 16, vy: Math.sin(a) * 16, from: 'p', dmg: Math.round(dmg * 0.8), crit, r: 0.18, life: 1.1, kind: 'arrow', col: '#eee' }); }
+    me.swing = 0.8; SFX.shoot(); SFX.shoot();
+  } else if (t.kind === 'wand') {
+    const cost = Math.round(Math.max(40, me.maxMana * 0.35) * (1 - Math.min(80, G.stats.manaSave) / 100));
+    if (me.mana < cost) return warn('Not enough mana for Arcane Nova');
+    me.mana -= cost;
+    const { dmg } = calcDamage('wand', t.dmg), col = ITEMS[held().id].icon.c;
+    for (const m of z.mobs) { if (m.dead) continue; const d = Math.hypot(m.x - me.x, m.y - me.y); if (d < 4 + m.r) { damageMob(z, m, Math.round(dmg * 2.5 * hitMult(m)), false, Math.atan2(m.y - me.y, m.x - me.x)); m.kx *= 2; m.ky *= 2; } }
+    FX.ring(me.x, me.y, 4, col); FX.ring(me.x, me.y, 2.5, '#fff'); FX.flash = 0.25; FX.flashCol = col; G.shake = Math.max(G.shake, 0.3);
+    for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2; G.particles.push({ x: me.x, y: me.y - 0.3, vx: Math.cos(a) * 9, vy: Math.sin(a) * 9, life: 0.5, max: 0.5, col, size: 5, grav: 0 }); }
+    SFX.zap(); SFX.boss();
+  }
+  me.abCd = A.cd; me.abMax = A.cd;
 }
