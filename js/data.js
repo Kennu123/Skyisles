@@ -692,6 +692,210 @@ const FISH_RES = { raw_cod: 0, raw_salmon: 2, pufferfish: 5, prismarine: 6, shri
 ENGINEER_STOCK.push(['fast_conveyor', 90], ['sorter', 400], ['auto_fisher', 3500], ['washer', 4000]);
 MERCHANT_STOCK.push(['moonberry', 200]);
 
+// =====================================================================
+//  Expansion II: relics, crafting components, advanced gear, crystals,
+//  more enchants, quest givers and the black market
+// =====================================================================
+// relics can't be crafted: they come from quests, the black market and a few bosses
+const RELICS = [
+  ['heartwood', 'Heartwood', 'foraging', { s: 'log', c1: '#5a2a1a', c2: '#ffb46a', glint: 1 }, 2, 900],
+  ['deep_ore', 'Deep Ore Fragment', 'mining', { s: 'ore', c1: '#3a3a52', c2: '#ff9a3a', glint: 1 }, 2, 900],
+  ['golden_seed', 'Golden Seed', 'farming', { s: 'seed', c: '#ffd23a', glint: 1 }, 2, 900],
+  ['warlord_sigil', 'Warlord Sigil', 'combat', { s: 'e', e: '🎖️', glint: 1 }, 2, 900],
+  ['ancient_rune', 'Ancient Rune', 'combat', { s: 'e', e: '🪬', glint: 1 }, 2, 1100],
+  ['tide_pearl', 'Tide Pearl', 'fishing', { s: 'e', e: '🔵', glint: 1 }, 2, 1100],
+  ['sky_crystal', 'Sky Crystal', 'special', { s: 'gem', c: '#9ae0ff', glint: 1 }, 3, 3500],
+];
+RELICS.forEach(([id, name, cat, icon, rar, price]) => I(id, name, { cat, icon, rar, price, relic: 1, desc: 'A relic. Earned from quests, sold now and then on the Black Market.' }));
+
+// middle-ground components
+const CMP = (id, name, icon, rar, ins, bt, req, desc) => { I(id, name, { cat: 'component', icon, rar, desc }); R(id, 1, ins, 'bench', req, 'components', bt); };
+CMP('reinforced_handle', 'Reinforced Handle', { s: 'stick', c: '#c8c8d0' }, 1, [['iron_ingot', 4], ['stick', 8], ['string', 4]], 2, null, 'Sturdy grip for advanced tools.');
+CMP('gear_assembly', 'Gear Assembly', { s: 'e', e: '⚙️' }, 1, [['iron_ingot', 8], ['redstone', 16], ['gold_ingot', 2]], 2, null, 'Moving parts for advanced tools.');
+CMP('tempered_plate', 'Tempered Plate', { s: 'ingot', c: '#9aa0b8' }, 1, [['enchanted_iron_ingot', 1], ['coal', 16]], 2, null, 'Hardened metal plating.');
+CMP('arcane_circuit', 'Arcane Circuit', { s: 'gem', c: '#6a8aff' }, 2, [['lapis', 32], ['redstone', 32], ['diamond', 1]], 3, null, 'Channels magic through metal.');
+CMP('mithril_plating', 'Mithril Plating', { s: 'ingot', c: '#6fffc8', glint: 1 }, 3, [['enchanted_mithril', 2], ['tempered_plate', 2]], 4, ['mining', 14], 'Light, unbreakable plating.');
+CMP('starsteel_ingot', 'Starsteel Ingot', { s: 'ingot', c: '#ffe9a8', glint: 1 }, 4, [['enchanted_titanium', 1], ['mithril_plating', 1], ['sky_crystal', 2]], 4, ['mining', 20], 'The finest metal in the skies.');
+CMP('lumber_core', 'Lumber Core', { s: 'gem', c: '#6ad84a', glint: 1 }, 2, [['heartwood', 2], ['gear_assembly', 1], ['enchanted_oak_log', 2]], 2, ['foraging', 4], 'The heart of an advanced axe.');
+CMP('mining_core', 'Mining Core', { s: 'gem', c: '#ff9a3a', glint: 1 }, 2, [['deep_ore', 2], ['gear_assembly', 1], ['enchanted_cobblestone', 2]], 2, ['mining', 4], 'The heart of an advanced pickaxe or drill.');
+CMP('harvest_core', 'Harvest Core', { s: 'gem', c: '#ffd23a', glint: 1 }, 2, [['golden_seed', 2], ['gear_assembly', 1], ['enchanted_wheat', 2]], 2, ['farming', 4], 'The heart of an advanced hoe.');
+CMP('battle_core', 'Battle Core', { s: 'gem', c: '#ff4a4a', glint: 1 }, 2, [['warlord_sigil', 2], ['tempered_plate', 1], ['enchanted_bone', 2]], 2, ['combat', 4], 'The heart of an advanced sword or bow.');
+CMP('arcane_core', 'Arcane Core', { s: 'gem', c: '#b88aff', glint: 1 }, 2, [['ancient_rune', 2], ['arcane_circuit', 1], ['enchanted_lapis', 2]], 3, ['combat', 5], 'The heart of an advanced wand.');
+CMP('tide_core', 'Tide Core', { s: 'gem', c: '#3ac8ff', glint: 1 }, 2, [['tide_pearl', 2], ['gear_assembly', 1], ['enchanted_raw_cod', 2]], 2, ['fishing', 4], 'The heart of an advanced fishing rod.');
+
+// advanced gear: lots of gathering + components + relics, a reason to do more than grind levels
+//   id, name, icon shape, colour, rarity, tool, stats, ingredients, requirement, bench tier
+const ADV = [
+  ['woodsplitter', 'Woodsplitter', 'axe', '#8ae86a', 2, { kind: 'axe', tier: 4, power: 16 }, { foragingFortune: 45 }, [['lumber_core', 1], ['reinforced_handle', 1], ['birch_log', 64]], ['foraging', 4], 2],
+  ['jungle_reaper', 'Jungle Reaper', 'axe', '#2fd36a', 3, { kind: 'axe', tier: 6, power: 30 }, { foragingFortune: 95, strength: 15 }, [['lumber_core', 2], ['mithril_plating', 1], ['enchanted_jungle_log', 6]], ['foraging', 12], 4],
+  ['worldtree_axe', 'Worldtree Axe', 'axe', '#ffb46a', 5, { kind: 'axe', tier: 8, power: 80 }, { foragingFortune: 230, strength: 45 }, [['lumber_core', 3], ['starsteel_ingot', 2], ['heartwood', 8], ['enchanted_witchwood_log', 4]], ['foraging', 22], 4],
+  ['stonebreaker', 'Stonebreaker', 'pickaxe', '#ffb46a', 2, { kind: 'pickaxe', tier: 4, power: 16 }, { miningFortune: 45 }, [['mining_core', 1], ['reinforced_handle', 1], ['cobblestone', 128]], ['mining', 4], 2],
+  ['excavator', 'Excavator', 'drill', '#ffd23a', 3, { kind: 'drill', tier: 6, power: 36, fuel: 4000 }, { miningFortune: 85, breakPct: 20 }, [['mining_core', 2], ['mithril_plating', 1], ['gear_assembly', 2]], ['mining', 13], 4],
+  ['stardriller', 'Stardriller', 'drill', '#ffe9a8', 5, { kind: 'drill', tier: 8, power: 90, fuel: 15000 }, { miningFortune: 230, breakPct: 45 }, [['mining_core', 3], ['starsteel_ingot', 2], ['deep_ore', 8], ['enchanted_frostite', 4]], ['mining', 24], 4],
+  ['bountiful_hoe', 'Bountiful Hoe', 'hoe', '#ffe94d', 2, { kind: 'hoe', tier: 4, power: 1, sweep: 1 }, { farmingFortune: 95 }, [['harvest_core', 1], ['reinforced_handle', 1], ['wheat', 128]], ['farming', 4], 2],
+  ['ember_sickle', 'Ember Sickle', 'hoe', '#ff7a2a', 3, { kind: 'hoe', tier: 6, power: 1, sweep: 2 }, { farmingFortune: 175, speed: 10 }, [['harvest_core', 2], ['tempered_plate', 2], ['enchanted_pumpkin', 4]], ['farming', 10], 3],
+  ['harvest_crown', 'Harvest Crown Hoe', 'hoe', '#ffd23a', 5, { kind: 'hoe', tier: 8, power: 1, sweep: 2 }, { farmingFortune: 390, speed: 30 }, [['harvest_core', 3], ['starsteel_ingot', 2], ['golden_seed', 8], ['enchanted_moonberry', 4]], ['farming', 22], 4],
+  ['knights_blade', 'Knight\'s Blade', 'sword', '#d8d8ff', 2, { kind: 'sword', dmg: 75 }, { strength: 25, defense: 15 }, [['battle_core', 1], ['reinforced_handle', 1], ['iron_ingot', 32]], ['combat', 4], 2],
+  ['warlord_greatsword', 'Warlord Greatsword', 'sword', '#ff6a4a', 3, { kind: 'sword', dmg: 200 }, { strength: 70, critDamage: 40 }, [['battle_core', 2], ['mithril_plating', 1], ['enchanted_spider_eye', 4]], ['combat', 12], 4],
+  ['skybreaker', 'Skybreaker', 'sword', '#9ae0ff', 5, { kind: 'sword', dmg: 440 }, { strength: 140, critDamage: 120, critChance: 10 }, [['battle_core', 3], ['starsteel_ingot', 2], ['warlord_sigil', 8], ['void_shard', 32]], ['combat', 22], 4],
+  ['ranger_bow', 'Ranger Bow', 'bow', '#8ae86a', 2, { kind: 'bow', dmg: 70 }, { critChance: 5, critDamage: 15 }, [['battle_core', 1], ['reinforced_handle', 1], ['string', 32]], ['combat', 5], 2],
+  ['stormstring', 'Stormstring Bow', 'bow', '#7ab8ff', 3, { kind: 'bow', dmg: 185 }, { critChance: 10, critDamage: 40, strength: 30 }, [['battle_core', 2], ['arcane_circuit', 1], ['enchanted_string', 4]], ['combat', 12], 3],
+  ['celestial_bow', 'Celestial Bow', 'bow', '#ffe9a8', 5, { kind: 'bow', dmg: 400 }, { critChance: 15, critDamage: 90, strength: 60 }, [['battle_core', 3], ['starsteel_ingot', 2], ['sky_crystal', 4]], ['combat', 22], 4],
+  ['runic_wand', 'Runic Wand', 'wand', '#b88aff', 2, { kind: 'wand', dmg: 65, mana: 18, ab: 'bolt' }, { intelligence: 90 }, [['arcane_core', 1], ['reinforced_handle', 1]], ['combat', 5], 3],
+  ['arcanum_staff', 'Arcanum Staff', 'wand', '#7a6aff', 3, { kind: 'wand', dmg: 180, mana: 30, ab: 'chain' }, { intelligence: 230 }, [['arcane_core', 2], ['mithril_plating', 1], ['ectoplasm', 32]], ['combat', 13], 4],
+  ['astral_codex', 'Astral Codex', 'wand', '#ffd2ff', 5, { kind: 'wand', dmg: 380, mana: 48, ab: 'boom' }, { intelligence: 430, spellDmg: 20 }, [['arcane_core', 3], ['starsteel_ingot', 2], ['ancient_rune', 8]], ['combat', 22], 4],
+  ['anglers_pride', 'Angler\'s Pride', 'rod', '#3ac8ff', 2, { kind: 'rod', tier: 3 }, { fishingSpeed: 30, treasure: 5 }, [['tide_core', 1], ['reinforced_handle', 1], ['string', 32]], ['fishing', 4], 2],
+  ['abyss_rod', 'Abyss Rod', 'rod', '#5a3aff', 4, { kind: 'rod', tier: 5 }, { fishingSpeed: 60, treasure: 12 }, [['tide_core', 2], ['mithril_plating', 1], ['tide_pearl', 6]], ['fishing', 14], 4],
+];
+ADV.forEach(([id, name, shape, c, rar, tool, stats, ins, req, bt]) => {
+  I(id, name, { unique: 1, rar, cat: shape === 'sword' || shape === 'bow' || shape === 'wand' ? 'weapon' : 'tool', icon: { s: shape, c }, tool, stats });
+  const r = R(id, 1, ins, 'bench', req, shape === 'sword' || shape === 'bow' || shape === 'wand' ? 'weapons' : 'tools', bt);
+  if (['axe', 'pickaxe', 'hoe', 'sword'].includes(shape) && ins.length <= 3) r.shape = null;
+});
+
+// crystals: socket one at the Blacksmith for a powerful special reforge
+//   id, name, colour, rarity, reforge name, groups it fits, stats
+const CRYSTALS = [
+  ['ember_crystal', 'Ember Crystal', '#ff7a2a', 2, 'Blazing', ['melee', 'ranged'], { strength: 18, critDamage: 28 }],
+  ['frost_crystal', 'Frost Crystal', '#9af0ff', 2, 'Glacial', ['armor', 'melee'], { defense: 35, health: 50 }],
+  ['storm_crystal', 'Storm Crystal', '#ffe94d', 3, 'Stormborn', ['magic', 'ranged'], { intelligence: 70, critChance: 7 }],
+  ['verdant_crystal', 'Verdant Crystal', '#6ad84a', 2, 'Verdant', ['tool'], { fortune: 28, xpBoost: 6 }],
+  ['void_crystal', 'Void Crystal', '#9a4dff', 4, 'Abyssal', ['melee', 'magic'], { strength: 32, critDamage: 45, damagePct: 6 }],
+  ['sun_crystal', 'Sun Crystal', '#ffd23a', 4, 'Radiant', ['armor', 'magic'], { health: 80, defense: 25, intelligence: 40 }],
+  ['tide_crystal', 'Tide Crystal', '#3ac8ff', 3, 'Tidal', ['rod', 'tool'], { treasure: 6, fishingSpeed: 20, fortune: 12 }],
+];
+const CRYSTAL_REF = {};
+CRYSTALS.forEach(([id, name, c, rar, rname, groups, st]) => {
+  I(id, name, { cat: 'special', icon: { s: 'gem', c, glint: 1 }, rar, price: [0, 0, 6000, 15000, 40000][rar], crystal: 'cr_' + id, desc: `Socket at the Blacksmith for the "${rname}" reforge on ${groups.map(g => ({ melee: 'swords', ranged: 'bows', magic: 'wands', tool: 'tools', armor: 'armor', rod: 'rods' }[g])).join(', ')}.` });
+  CRYSTAL_REF['cr_' + id] = { n: rname, st, groups, item: id, crystal: 1 };
+});
+// crystals and relics also drop from bosses now
+const addDrop = (mob, d) => MOBS[mob].drops.push(d);
+addDrop('bog_king', ['ember_crystal', 1, 1, 0.05]); addDrop('bog_king', ['warlord_sigil', 1, 2, 0.4]);
+addDrop('broodmother', ['void_crystal', 1, 1, 0.04]); addDrop('broodmother', ['warlord_sigil', 1, 3, 0.5]);
+addDrop('rock_golem', ['frost_crystal', 1, 1, 0.08]); addDrop('rock_golem', ['deep_ore', 1, 3, 0.5]);
+addDrop('elder_treant', ['verdant_crystal', 1, 1, 0.08]); addDrop('elder_treant', ['heartwood', 1, 3, 0.5]);
+addDrop('scarecrow', ['verdant_crystal', 1, 1, 0.08]); addDrop('scarecrow', ['golden_seed', 1, 3, 0.5]);
+addDrop('kraken', ['tide_crystal', 1, 1, 0.15]); addDrop('kraken', ['tide_pearl', 2, 4, 0.7]);
+addDrop('inferno_titan', ['sun_crystal', 1, 1, 0.1]); addDrop('inferno_titan', ['sky_crystal', 1, 2, 0.5]);
+addDrop('glacier_colossus', ['frost_crystal', 1, 1, 0.15]); addDrop('hollow_king', ['verdant_crystal', 1, 1, 0.15]); addDrop('harvest_wraith', ['sun_crystal', 1, 1, 0.06]);
+addDrop('void_wyrm', ['void_crystal', 1, 1, 0.12]); addDrop('necromancer', ['storm_crystal', 1, 1, 0.1]); addDrop('lich_king', ['sky_crystal', 1, 3, 0.6]);
+
+// more enchantments
+Object.assign(ENCHANTS, {
+  first_strike: { name: 'First Strike', max: 4, on: ['sword', 'bow'], desc: l => `+${l * 25}% damage against unhurt foes`, cost: 220 },
+  giant_killer: { name: 'Giant Killer', max: 5, on: ['sword', 'bow', 'wand'], desc: l => `+${l * 6}% damage against bosses`, cost: 300 },
+  vampirism: { name: 'Vampirism', max: 4, on: ['sword', 'bow'], desc: l => `Heal ${l * 4}% of missing health on each kill`, cost: 260 },
+  haste: { name: 'Haste', max: 4, on: ['sword'], desc: l => `Swing ${l * 6}% faster`, cost: 280 },
+  abundance: { name: 'Abundance', max: 4, on: ['axe', 'pickaxe', 'drill', 'hoe'], desc: l => `${l * 3}% chance to triple your drops`, cost: 350 },
+  replenish: { name: 'Replenish', max: 3, on: ['hoe'], desc: l => `Your replanted crops start ${l * 10}% grown`, cost: 250 },
+  green_thumb: { name: 'Green Thumb', max: 4, on: ['hoe'], desc: l => `+${l * 8}% Farming XP`, cost: 220 },
+  thorns: { name: 'Thorns', max: 4, on: ['armor'], desc: l => `Reflect ${l * 3}% of damage taken (stacks across pieces)`, cost: 200 },
+  rejuvenate: { name: 'Rejuvenate', max: 4, on: ['armor'], desc: l => `+${(l * 0.3).toFixed(1)}% health regen per second (stacks)`, cost: 200 },
+  wisdom: { name: 'Wisdom', max: 5, on: ['wand'], desc: l => `+${l * 15} Intelligence`, cost: 180 },
+  mana_flow: { name: 'Mana Flow', max: 4, on: ['wand'], desc: l => `${l * 5}% less mana per spell`, cost: 220 },
+  magnet: { name: 'Magnet', max: 3, on: ['rod'], desc: l => `${l * 10}% chance to catch double`, cost: 180 },
+});
+
+// quest givers: each has a story chain, then a repeatable job that pays in relics
+//   q: [type, target, amount, intro line, reward {c: coins, x: [skill, xp], i: items}]
+//   types: kill, gather (by hand), fish (any catch), craft, level, visit, deliver (items are taken)
+const QUESTGIVERS = {
+  lars: { name: 'Lumberjack Lars', role: 'Quests', e: '🪓', shirt: '#6a8a3a', hair: '#c8641a', zone: 'hub', at: [32, 12], cd: 30,
+    q: [
+      ['gather', 'oak_log', 32, 'These woods need thinning! Chop me 32 Oak Logs, would you?', { c: 150, x: ['foraging', 80], i: [['heartwood', 1]] }],
+      ['craft', 'stone_axe', 1, 'Fists are for brawling, not for trees. Craft yourself a Stone Axe.', { c: 200, x: ['foraging', 120] }],
+      ['gather', 'birch_log', 64, 'Birch makes the best handles. Bring in 64 Birch Logs.', { c: 300, x: ['foraging', 200], i: [['heartwood', 1]] }],
+      ['level', 'foraging', 5, 'Show me you\'re a real lumberjack: reach Foraging 5.', { c: 500, i: [['heartwood', 2], ['verdant_crystal', 1]] }],
+      ['gather', 'spruce_log', 128, 'Spruce for the long winters. 128 logs, friend.', { c: 900, x: ['foraging', 600], i: [['heartwood', 2]] }],
+      ['kill', 'mossback', 1, 'A walking stump called Mossback is trampling Oakwood Grove. Fell it!', { c: 1500, x: ['foraging', 900], i: [['heartwood', 3]] }],
+    ],
+    rep: ['deliver', 'enchanted_oak_log', 2, 'Got any Compacted Oak? 2 of those and I\'ll pay in Heartwood.', { c: 400, i: [['heartwood', 2]] }] },
+  magda: { name: 'Miner Magda', role: 'Quests', e: '⛏️', shirt: '#5a5a7a', hair: '#e8e8e8', zone: 'hub', at: [22, 36], cd: 30,
+    q: [
+      ['gather', 'cobblestone', 64, 'Every miner starts with stone. Dig up 64 Cobblestone.', { c: 150, x: ['mining', 80], i: [['deep_ore', 1]] }],
+      ['gather', 'coal', 48, 'Coal keeps the furnaces burning. Mine 48 of it.', { c: 200, x: ['mining', 120] }],
+      ['craft', 'furnace', 1, 'Build yourself a Furnace. Raw ore\'s no good to anyone.', { c: 200, x: ['mining', 120] }],
+      ['gather', 'iron_ore', 64, 'Now for real metal: mine 64 Iron Ore.', { c: 400, x: ['mining', 300], i: [['deep_ore', 1]] }],
+      ['deliver', 'iron_ingot', 32, 'Smelt it down and bring me 32 Iron Ingots.', { c: 600, x: ['mining', 400], i: [['deep_ore', 2], ['ember_crystal', 1]] }],
+      ['kill', 'pebble_golem', 1, 'The Pebble Golem in the Quarry keeps collapsing my tunnels. Smash it!', { c: 1500, x: ['mining', 900], i: [['deep_ore', 3]] }],
+    ],
+    rep: ['deliver', 'enchanted_cobblestone', 3, 'Need Compacted Cobblestone for supports. 3 of them, and the deep ore is yours.', { c: 400, i: [['deep_ore', 2]] }] },
+  fen: { name: 'Farmer Fen', role: 'Quests', e: '🌾', shirt: '#c8a03a', hair: '#7a4a1a', zone: 'hub', at: [79, 34], cd: 30,
+    q: [
+      ['gather', 'wheat', 64, 'Harvest time! Bring in 64 Wheat from the fields.', { c: 150, x: ['farming', 80], i: [['golden_seed', 1]] }],
+      ['craft', 'bread', 5, 'Bake 5 loaves of Bread. Farmers need fuel too!', { c: 200, x: ['farming', 120] }],
+      ['gather', 'carrot', 128, 'The rabbits got into my patch. Grow me 128 Carrots.', { c: 300, x: ['farming', 200] }],
+      ['level', 'farming', 5, 'Reach Farming 5 and I\'ll share my lucky seeds.', { c: 500, i: [['golden_seed', 2], ['verdant_crystal', 1]] }],
+      ['deliver', 'pumpkin', 64, 'Festival\'s coming! I need 64 Pumpkins.', { c: 900, x: ['farming', 600], i: [['golden_seed', 2]] }],
+      ['kill', 'rat_king', 1, 'The Rat King is stealing from Golden Meadows. End his reign!', { c: 1500, x: ['farming', 900], i: [['golden_seed', 3]] }],
+    ],
+    rep: ['deliver', 'enchanted_wheat', 2, 'Two Compacted Wheat, and you\'ll get Golden Seeds in return.', { c: 400, i: [['golden_seed', 2]] }] },
+  vex: { name: 'Sergeant Vex', role: 'Quests', e: '🛡️', shirt: '#8a2a2a', hair: '#2a2a2a', zone: 'hub', at: [54, 60], cd: 30,
+    q: [
+      ['kill', 'zombie', 15, 'Recruit! The graveyard\'s crawling. Put down 15 Zombies.', { c: 150, x: ['combat', 80], i: [['warlord_sigil', 1]] }],
+      ['kill', 'slime', 15, 'Slimes next. 15 of them. Mind your boots.', { c: 200, x: ['combat', 120] }],
+      ['craft', 'iron_sword', 1, 'That stick won\'t cut it. Forge an Iron Sword.', { c: 300, x: ['combat', 200] }],
+      ['visit', 'combat1', 1, 'Time for real work. Travel to the Rotting Marsh.', { c: 300, x: ['combat', 200] }],
+      ['kill', 'skeleton', 25, 'Skeletons are sniping our scouts. Take down 25.', { c: 700, x: ['combat', 500], i: [['warlord_sigil', 2], ['ember_crystal', 1]] }],
+      ['kill', 'bog_king', 1, 'The Bog King rules that swamp. Dethrone him, soldier!', { c: 2000, x: ['combat', 1200], i: [['warlord_sigil', 3], ['storm_crystal', 1]] }],
+    ],
+    rep: ['deliver', 'enchanted_rotten_flesh', 2, 'Bring 2 Compacted Rotten Flesh for the war hounds. I pay in sigils.', { c: 400, i: [['warlord_sigil', 2]] }] },
+  orin: { name: 'Sage Orin', role: 'Quests', e: '🔮', shirt: '#4a3a8a', hair: '#e8e8ff', zone: 'hub', at: [55, 33], cd: 40,
+    q: [
+      ['deliver', 'lapis', 32, 'Magic begins with Lapis. Bring me 32, apprentice.', { c: 200, x: ['combat', 100], i: [['ancient_rune', 1]] }],
+      ['craft', 'apprentice_wand', 1, 'Craft an Apprentice Wand. Feel the spark!', { c: 300, x: ['combat', 150] }],
+      ['kill', 'zombie', 20, 'Practice your spells: defeat 20 Zombies.', { c: 300, x: ['combat', 200] }],
+      ['level', 'combat', 5, 'Return when you have reached Combat 5.', { c: 500, i: [['ancient_rune', 2], ['storm_crystal', 1]] }],
+      ['craft', 'workbench_2', 1, 'Great crafts need great tables. Build a Reinforced Workbench.', { c: 600, x: ['mining', 300], i: [['sky_crystal', 1]] }],
+      ['deliver', 'diamond', 8, 'For my final lesson, I need 8 Diamonds.', { c: 2000, x: ['combat', 800], i: [['ancient_rune', 3], ['sun_crystal', 1]] }],
+    ],
+    rep: ['deliver', 'enchanted_lapis', 2, 'Two Compacted Lapis, and I\'ll carve you more runes.', { c: 500, i: [['ancient_rune', 2]] }] },
+  marlo: { name: 'Captain Marlo', role: 'Quests', e: '⚓', shirt: '#2a5a8a', hair: '#e8e8e8', zone: 'fishing1', rel: [3, -1], cd: 30,
+    q: [
+      ['fish', 'any', 10, 'Welcome aboard! Catch 10 fish from these waters.', { c: 300, x: ['fishing', 150], i: [['tide_pearl', 1]] }],
+      ['gather', 'coral_snapper', 16, 'Coral Snappers are the local delicacy. Catch 16.', { c: 500, x: ['fishing', 300] }],
+      ['kill', 'reef_crab', 10, 'The Reef Crabs keep snipping my nets. Clear out 10.', { c: 500, x: ['fishing', 300] }],
+      ['level', 'fishing', 8, 'Reach Fishing 8 and you\'ll earn your sea legs.', { c: 800, i: [['tide_pearl', 2], ['tide_crystal', 1]] }],
+      ['kill', 'kraken', 1, 'The Kraken! It rises when you fish here long enough. Slay it!', { c: 3000, x: ['fishing', 1500], i: [['tide_pearl', 4]] }],
+    ],
+    rep: ['deliver', 'raw_salmon', 64, '64 Raw Salmon for the galley, and pearls are yours.', { c: 400, i: [['tide_pearl', 2]] }] },
+  ivy: { name: 'Ranger Ivy', role: 'Quests', e: '🏹', shirt: '#2f6a3a', hair: '#a05a2a', zone: 'forest2', rel: [3, -1], cd: 45,
+    q: [
+      ['gather', 'jungle_log', 128, 'The canopy is choking the light. Fell 128 Jungle Logs.', { c: 800, x: ['foraging', 500], i: [['heartwood', 2]] }],
+      ['gather', 'acacia_log', 128, 'Now 128 Acacia Logs for the ranger lodge.', { c: 1000, x: ['foraging', 700] }],
+      ['kill', 'elder_treant', 1, 'The Elder Treant stirs during Timber Rush. Bring it down.', { c: 3000, x: ['foraging', 1500], i: [['sky_crystal', 1], ['verdant_crystal', 1]] }],
+      ['deliver', 'enchanted_darkoak_log', 4, 'Last favour: 4 Compacted Dark Oak Logs.', { c: 4000, i: [['heartwood', 4], ['sky_crystal', 1]] }],
+    ],
+    rep: ['deliver', 'enchanted_jungle_log', 3, '3 Compacted Jungle Logs buys you a Sky Crystal.', { c: 800, i: [['sky_crystal', 1]] }] },
+  gus: { name: 'Prospector Gus', role: 'Quests', e: '💎', shirt: '#8a6a3a', hair: '#cfcfcf', zone: 'mine2', rel: [3, 0], cd: 45,
+    q: [
+      ['gather', 'gold_ore', 128, 'Gold fever! Dig up 128 Gold Ore.', { c: 1000, x: ['mining', 600], i: [['deep_ore', 2]] }],
+      ['gather', 'lapis', 256, 'Lapis veins run deep. Collect 256 Lapis.', { c: 1000, x: ['mining', 600] }],
+      ['gather', 'redstone', 256, 'And 256 Redstone for my contraptions.', { c: 1200, x: ['mining', 700] }],
+      ['kill', 'rock_golem', 1, 'The Rock Golem wakes during Ore Rush. Crack it open!', { c: 3500, x: ['mining', 1500], i: [['sky_crystal', 1], ['frost_crystal', 1]] }],
+    ],
+    rep: ['deliver', 'enchanted_gold_ingot', 2, '2 Compacted Gold Ingots for a Sky Crystal. Deal?', { c: 800, i: [['sky_crystal', 1]] }] },
+  kael: { name: 'Warden Kael', role: 'Quests', e: '⚔️', shirt: '#3a2a4a', hair: '#1a1a1a', zone: 'combat2', rel: [3, -1], cd: 45,
+    q: [
+      ['kill', 'spider', 40, 'This nest must burn. Slay 40 Spiders.', { c: 1200, x: ['combat', 700], i: [['warlord_sigil', 2]] }],
+      ['kill', 'wolf', 25, 'The wolves hunt our scouts. Take out 25.', { c: 1200, x: ['combat', 700] }],
+      ['kill', 'broodling', 30, 'Broodlings swarm near the queen. 30 of them.', { c: 1500, x: ['combat', 900] }],
+      ['kill', 'broodmother', 1, 'Now the Broodmother herself. End this nightmare.', { c: 5000, x: ['combat', 2000], i: [['sky_crystal', 2], ['void_crystal', 1]] }],
+    ],
+    rep: ['deliver', 'enchanted_string', 3, '3 Compacted String keeps the walls standing. Here\'s a Sky Crystal.', { c: 900, i: [['sky_crystal', 1]] }] },
+};
+for (const [id, q] of Object.entries(QUESTGIVERS)) NPCS[id] = { name: q.name, role: q.role, e: q.e, shirt: q.shirt, hair: q.hair, quest: 1 };
+NPCS.blackmarket = { name: 'Shady Silas', role: 'Black Market', e: '🕶️', shirt: '#1a1a22', hair: '#3a3a3a' };
+// black market pool: [item, min price, max price, weight]
+const BLACK_MARKET = [
+  ['heartwood', 1800, 3200, 3], ['deep_ore', 1800, 3200, 3], ['golden_seed', 1800, 3200, 3], ['warlord_sigil', 1800, 3200, 3], ['ancient_rune', 2200, 3800, 3], ['tide_pearl', 2200, 3800, 3],
+  ['sky_crystal', 7000, 12000, 2], ['ember_crystal', 12000, 20000, 1.2], ['frost_crystal', 12000, 20000, 1.2], ['verdant_crystal', 12000, 20000, 1.2], ['storm_crystal', 25000, 40000, 0.8],
+  ['tide_crystal', 25000, 40000, 0.8], ['void_crystal', 70000, 110000, 0.4], ['sun_crystal', 70000, 110000, 0.4], ['lumber_core', 9000, 14000, 0.8], ['mining_core', 9000, 14000, 0.8],
+  ['battle_core', 9000, 14000, 0.8], ['arcane_core', 12000, 18000, 0.6], ['recombobulator', 45000, 70000, 0.5], ['egg_rare', 25000, 40000, 0.6], ['ench_book', 2500, 6000, 1.5],
+  ['starsteel_ingot', 60000, 90000, 0.3], ['knights_blade', 15000, 22000, 0.3], ['stonebreaker', 12000, 18000, 0.3],
+];
+
 // gear needs the right skill level to use (so lucky auction finds can't skip progression)
 function setUseReqs() {
   for (const r of RECIPES) { const it = ITEMS[r.out]; if ((it.tool || it.armor) && r.req && !it.useReq) it.useReq = r.req; }
@@ -738,3 +942,9 @@ function setUseReqs() {
 })();
 const BENCH_NAMES = ['', 'Workbench', 'Reinforced Workbench', 'Arcane Workbench', 'Starforge Workbench'];
 setUseReqs();
+
+// cinematic boss moves: shockwaves you jump over, meteors you roll away from
+for (const [id, extra] of Object.entries({ bog_king: ['shock'], rock_golem: ['shock'], glacier_colossus: ['shock', 'meteor'], inferno_titan: ['shock', 'meteor'], pebble_golem: ['shock'], bonelord: ['shock'],
+  lich_king: ['shock', 'meteor'], necromancer: ['meteor'], void_wyrm: ['meteor'], harvest_wraith: ['meteor'], hollow_king: ['shock'], broodmother: ['meteor'], elder_treant: ['shock'],
+  scarecrow: ['meteor'], kraken: ['shock'], mossback: ['shock'], leviathan: ['shock'], rat_king: ['meteor'] })) MOBS[id].attacks.push(...extra);
+MOBS.skeleton.ranged.kind = 'arrow'; MOBS.blaze.ranged.kind = 'fire'; MOBS.d_mage.ranged.kind = 'magic'; MOBS.wraith.ranged.kind = 'ghost'; MOBS.sea_guardian.ranged.kind = 'magic';
