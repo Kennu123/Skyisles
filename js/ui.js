@@ -72,7 +72,7 @@ const UI = {
     if (lines.length) h += `<div class="tl">${lines.join('<br>')}</div>`;
     if (s.d && s.d.ench && Object.keys(s.d.ench).length) h += `<div class="tl ench">${Object.entries(s.d.ench).map(([e, l]) => `<b>${ENCHANTS[e].name} ${ROMAN[l]}</b> <span class="dim">${ENCHANTS[e].desc(l)}</span>`).join('<br>')}</div>`;
     if (s.d && s.d.book) h += `<div class="tl ench"><b>${ENCHANTS[s.d.book].name} ${ROMAN[s.d.l]}</b><br><span class="dim">${ENCHANTS[s.d.book].desc(s.d.l)} · for ${ENCHANTS[s.d.book].on.map(k => KIND_NAME[k]).join(', ')}</span></div>`;
-    if (s.d && s.d.ref && gearKind(d)) h += `<div class="tl dim">Reforge: <b style="color:#5aa8ff">${REFORGES[REFORGE_GROUP[gearKind(d)]][s.d.ref].n}</b></div>`;
+    if (s.d && s.d.ref && gearKind(d)) h += `<div class="tl dim">Reforge: <b style="color:#5aa8ff">${(getRef(d, s.d.ref) || { n: s.d.ref }).n}</b>${s.d.ref.startsWith('cr_') ? ' <span style="color:#ffd23a">(crystal)</span>' : ''}</div>`;
     if (d.tool && d.tool.fuel && s.d) h += `<div class="tl" style="color:#ffb020">⛽ Fuel ${fmt(s.d.fuel)} / ${fmt(drillCap(s))}${s.d.eng ? ` · Engine ${ROMAN[s.d.eng]}` : ''}${s.d.tank ? ` · Tank ${ROMAN[s.d.tank]}` : ''}<br><span class="dim">Right-click to refuel with Coal or Charcoal</span></div>`;
     if (d.armor) { const set = SETS[d.armor.set]; h += `<div class="tl"><span style="color:${set.col}">Set bonus: ${set.name}</span><br><span class="dim">${set.desc} (wear all 4 pieces)</span><br><span style="color:#9aff8a">Right-click or shift-click to wear</span></div>`; }
     if (s.d && s.d.tier) h += `<div class="tl dim">${MACHINES[s.id].desc}<br>Tier ${ROMAN[s.d.tier]} · ${machinePeriod(s.id, s.d.tier).toFixed(1)}s per action</div>`;
@@ -123,6 +123,12 @@ const UI = {
     if (G.invDirty) { G.invDirty = false; this.renderHotbar(); if (this.cur && this.cur.inv) this.refresh(true); }
     if (this.cur && this.cur.live && (this.liveT = (this.liveT || 0) + 1) % 4 === 0) this.refresh('tick');
     $('mpBtn').classList.toggle('on', NET.connected);
+    $('hud').classList.toggle('cine', !!FX.cine); $('mapwrap').classList.toggle('cine', !!FX.cine);
+    // ability cooldowns
+    const tl = heldTool(), ab = tl && ABILITY[tl.kind];
+    const setCd = (id, frac, label) => { const el = $(id); if (!el) return; el.querySelector('i').style.height = clamp(frac, 0, 1) * 100 + '%'; if (label != null) el.querySelector('span').textContent = label; };
+    setCd('abJump', me.z > 0 ? 1 : 0); setCd('abRoll', me.rollCd / 0.9);
+    const abEl = $('abWeapon'); abEl.hidden = !ab; if (ab) { setCd('abWeapon', me.abCd / (me.abMax || 1), ab.icon); abEl.title = ab.name + ' (right-click): ' + ab.desc; }
   },
   renderHotbar() {
     let h = '';
@@ -136,7 +142,9 @@ const UI = {
     let h = '';
     if (P.tut < TUTORIAL.length) h = `<div class="qh">Tutorial · ${P.tut + 1}/${TUTORIAL.length}</div><div class="qt">${TUTORIAL[P.tut].t}</div>`;
     else { const g = GOALS.filter(g => !P.goals[g.id]).slice(0, 3); h = `<div class="qh">Goals</div>` + g.map(x => `<div class="qt">☆ ${x.t} <span class="dim">+${fmt(x.r)}</span></div>`).join('') || '<div class="qt">All goals complete! 🎉</div>'; }
-    $('quest').innerHTML = h;
+    const aq = activeQuests();
+    if (aq.length) h += `<div class="qh" style="margin-top:6px">Quests · L</div>` + aq.slice(0, 3).map(a => `<div class="qt">${a.done ? '✔' : '•'} ${esc(qTitle(a.q))} <span class="dim">${a.done ? '— return to ' + esc(QUESTGIVERS[a.id].name) : qProgText(a.id)}</span></div>`).join('');
+    if (h !== this.lastQuestHtml) { this.lastQuestHtml = h; $('quest').innerHTML = h; }
   },
   toast(msg, col = '#fff') {
     const d = document.createElement('div'); d.className = 'toast'; d.style.borderColor = col; d.innerHTML = msg;
@@ -222,7 +230,7 @@ const UI = {
     const bt = benchTier();
     this.open(bt ? `🛠️ ${BENCH_NAMES[bt]}` : '✋ Pocket Crafting', () => {
       const bt = benchTier(), q = (($('craftQ') && $('craftQ').value) || '').toLowerCase();
-      const tabs = ['all', 'materials', 'tools', 'weapons', 'armor', 'blocks', 'machines', 'food'];
+      const tabs = ['all', 'materials', 'components', 'tools', 'weapons', 'armor', 'blocks', 'machines', 'food'];
       const list = RECIPES.map((r, ri) => ({ r, ri, s: recipeStatus(r, bt) })).filter(({ r }) => (this.tab.craft === 'all' || r.cat === this.tab.craft) && (!q || ITEMS[r.out].name.toLowerCase().includes(q)));
       const rank = s => s.ok ? 0 : s.lock ? 3 : s.station ? 2 : 1;
       list.sort((a, b) => rank(a.s) - rank(b.s) || (ITEMS[a.r.out].rar - ITEMS[b.r.out].rar) || ITEMS[a.r.out].name.localeCompare(ITEMS[b.r.out].name));
@@ -416,7 +424,7 @@ const UI = {
   openHelp() {
     this.open('Controls & Tips', () => `<div class="help">
       <div><b>Move</b> W A S D · <b>Aim</b> mouse</div><div><b>Use / break / attack</b> hold left-click</div><div><b>Place / plant / eat / open</b> right-click</div>
-      <div><b>Talk / use station</b> F · <b>Rotate conveyor</b> R</div><div><b>Hotbar</b> 1–9 or mouse wheel</div>
+      <div><b>Talk / use station</b> F · <b>Rotate conveyor</b> R</div><div><b>Jump</b> Space (clears slams and shockwaves) · <b>Dodge roll</b> Shift (briefly untouchable)</div><div><b>Weapon ability</b> right-click with a sword (Dash Strike), bow (Arrow Volley) or wand (Arcane Nova)</div><div><b>Zoom</b> + / − · <b>Big map</b> N · <b>Quests</b> L</div><div><b>Hotbar</b> 1–9 or mouse wheel</div>
       <div><b>Inventory</b> E · <b>Craft</b> C · <b>Skills</b> K · <b>Pets</b> P · <b>Warp map</b> M · <b>Chat</b> T or Enter · <b>Menu</b> Esc</div>
       <hr><div>🪓 Every tool is best at its own job: axes chop trees, pickaxes and drills mine ore, hoes till and harvest, swords/bows/wands fight. Better tools hit harder and add Fortune (more drops).</div>
       <div>📈 Breaking natural resources gives skill XP. Blocks you placed yourself never do. Skill levels unlock new trees, ores, crops, islands and recipes.</div>
@@ -428,6 +436,7 @@ const UI = {
   // ------------------------------------------------------------------ npcs
   openNpc(id) {
     const n = NPCS[id], f = NPC_PANELS[id], L = NPC_LINES[id];
+    if (QUESTGIVERS[id]) return this.questTalk(id);
     if (!L) return f && f(n);
     const first = !G.P.met[id]; G.P.met[id] = 1;
     if (id === 'guide') {
@@ -537,7 +546,7 @@ function craft(ri, times) {
     if (left) spawnDrop(G.zone, G.me.x, G.me.y, r.out, left);
     made += r.n;
   }
-  if (made) { SFX.craft(); UI.pickup(r.out, made); burst(G.me.x, G.me.y - 0.5, '#ffe9a8', 10, 2, 4); questCheck(); }
+  if (made) { questProgress('craft', r.out, made); SFX.craft(); UI.pickup(r.out, made); burst(G.me.x, G.me.y - 0.5, '#ffe9a8', 10, 2, 4); questCheck(); }
 }
 
 // ------------------------------------------------------------- NPC panels
@@ -689,7 +698,7 @@ UI.openEnchant = function (n) {
     for (const [id, e] of Object.entries(ENCHANTS)) {
       if (!e.on.includes(kind)) continue;
       h += `<div class="ench"><div><b>${e.name}</b> ${cur[id] ? `<span class="tag">${ROMAN[cur[id]]}</span>` : ''}<div class="small dim">${e.desc(Math.max(1, cur[id] || 1))}</div></div><div class="row gap wrap">`;
-      for (let l = 1; l <= e.max; l++) { const c = enchantCost(id, l), ok = (cur[id] || 0) < l && G.P.coins >= c.coins && countItem('lapis') >= c.lapis; h += `<button class="btn xs ${(cur[id] || 0) >= l ? 'ghost' : ''}" data-a="enchant" data-v="${id}|${l}" ${ok ? '' : 'disabled'} title="${fmt(c.coins)} coins + ${c.lapis} lapis">${ROMAN[l]} · ${fmt(c.coins)}</button>`; }
+      for (let l = 1; l <= e.max; l++) { const c = enchantUpgradeCost(id, cur[id] || 0, l), ok = (cur[id] || 0) < l && G.P.coins >= c.coins && countItem('lapis') >= c.lapis; h += `<button class="btn xs ${(cur[id] || 0) >= l ? 'ghost' : ''}" data-a="enchant" data-v="${id}|${l}" ${ok ? '' : 'disabled'} title="${fmt(c.coins)} coins + ${c.lapis} lapis">${ROMAN[l]} · ${fmt(c.coins)}</button>`; }
       h += '</div></div>';
     }
     h += '</div>';
@@ -710,6 +719,8 @@ UI.openReforge = function (n) {
     const r = instRar(s), cost = REFORGE_COST[r], grp = REFORGE_GROUP[gearKind(ITEMS[s.id])];
     h += `<div class="reforge"><div class="big slot r${r} glint">${'<img src="' + iconURL(s.id) + '" alt="">'}</div><div class="grow"><div style="color:${RCOL[r]};font-size:1.2em">${esc(instName(s))}</div><div class="small dim">Possible: ${Object.values(REFORGES[grp]).map(x => x.n).join(', ')}</div>
       <div class="row gap"><button class="btn" data-a="reforge" ${G.P.coins >= cost ? '' : 'disabled'}>Reforge · 🪙 ${fmt(cost)}</button><button class="btn ghost" data-a="recomb" ${countItem('recombobulator') && !s.d.rec ? '' : 'disabled'}>Recombobulate${s.d.rec ? ' (done)' : ` (${countItem('recombobulator')})`}</button></div></div></div>`;
+    const crys = G.P.inv.map((c, k) => c && ITEMS[c.id].crystal && CRYSTAL_REF[ITEMS[c.id].crystal].groups.includes(grp) ? k : -1).filter(k => k >= 0);
+    h += `<div class="lbl">Crystal reforges</div>${crys.length ? `<div class="row gap wrap">${crys.map(k => { const cr = CRYSTAL_REF[ITEMS[G.P.inv[k].id].crystal]; return `<div class="egbox">${this.slot(G.P.inv[k], 'inv:' + k)}<span class="small">${cr.n}</span><button class="btn xs" data-a="crystal" data-v="${k}" ${G.P.coins >= cost * 2 ? '' : 'disabled'}>Socket · 🪙 ${fmt(cost * 2)}</button></div>`; }).join('')}</div>` : `<div class="small dim">No crystals that fit this item. Crystals come from quests, bosses and the Black Market.</div>`}`;
     return h;
   }, true);
   this.cur.inv = true; this.cur.pickInv = i => { const s = G.P.inv[i]; if (s && gearKind(ITEMS[s.id])) { this.pick = { kind: 'inv', i }; this.refresh(); } };
@@ -793,7 +804,7 @@ const ACT = {
   },
   expand() { const next = ISLAND_SIZES[G.P.islandR + 1]; if (!next || G.P.coins < next.cost) return; G.P.coins -= next.cost; G.P.islandR++; const hz = getZone(homeKey()); expandHome(hz, next.r, G.P.uid); UI.announce('Island expanded!', '#7ad8ff', `Your island now has radius ${next.r}.`); SFX.level(); UI.refresh(); },
   enchant(v) {
-    const [id, l] = v.split('|'), s = G.P.inv[UI.pick.i], c = enchantCost(id, +l);
+    const [id, l] = v.split('|'), s = G.P.inv[UI.pick.i], c = enchantUpgradeCost(id, s.d.ench[id] || 0, +l);
     if (G.P.coins < c.coins || !removeItem('lapis', c.lapis)) return;
     G.P.coins -= c.coins; s.d.ench[id] = +l; G.P.flags.enchanted = 1; SFX.hatch(); burst(G.me.x, G.me.y - 0.5, '#c46bff', 30, 3, 5); questCheck(); G.invDirty = true; UI.refresh();
   },
@@ -873,5 +884,52 @@ Object.assign(ACT, {
     if (m.z.remote) { NET.send({ t: 'mact', i: m.i, op: 'takein' }); return; }
     for (const id of Object.keys(o.inq)) { const left = addItem(id, o.inq[id]); if (left) o.inq[id] = left; else delete o.inq[id]; }
     UI.refresh();
+  },
+});
+function enchantUpgradeCost(id, cur, l) {
+  // you only pay the difference between your current level and the new one
+  const a = enchantCost(id, l), b = cur > 0 && cur < l ? enchantCost(id, cur) : { coins: 0, lapis: 0 };
+  return { coins: Math.max(0, a.coins - b.coins), lapis: Math.max(1, a.lapis - b.lapis) };
+}
+UI.questTalk = function (id) {
+  const g = QUESTGIVERS[id], st = qState(id), cur = qCurrent(id);
+  const rwText = rw => [rw.c ? `🪙 ${fmt(rw.c)}` : '', rw.x ? `${fmt(rw.x[1])} ${SKILLS[rw.x[0]].name} XP` : '', ...(rw.i || []).map(([i, n]) => `${n}× <span style="color:${RCOL[ITEMS[i].rar]}">${esc(ITEMS[i].name)}</span>`)].filter(Boolean).join(' · ');
+  if (!cur) return this.say(id, [`That's all the work I have for now. Come back in <b>${tLeft(st.rep - Date.now())}</b>!`]);
+  const q = cur.q;
+  if (st.active) {
+    if (qDone(id)) return this.say(id, [`You did it! <b>${esc(qTitle(q))}</b>.`, `Here's what I promised: ${rwText(q[4])}`], [['🎁 Claim reward', () => turnInQuest(id)], ['Later', null]]);
+    return this.say(id, [`How's it going? <b>${esc(qTitle(q))}</b>: ${qProgText(id)}`, q[0] === 'deliver' ? 'Bring the items with you and talk to me again.' : 'Come back when it\'s done!'], [['On it!', null], ['Abandon quest', () => { st.active = false; st.prog = 0; UI.toast('Quest abandoned', '#aaa'); questCheck(); }]]);
+  }
+  const step = cur.repeat ? 'Repeatable job' : `Quest ${st.i + 1} of ${g.q.length}`;
+  const hello = !cur.repeat && st.i === 0 ? `Well met! I'm ${g.name}. ` : '';
+  this.say(id, [hello + q[3], `<b>${step}:</b> ${esc(qTitle(q))}<br><b>Reward:</b> ${rwText(q[4])}`], [['📜 Accept quest', () => acceptQuest(id)], ['Not now', null]]);
+};
+UI.openQuests = function () {
+  this.open('📜 Quest Log', () => Object.entries(QUESTGIVERS).map(([id, g]) => {
+    const st = qState(id), cur = qCurrent(id), mark = qMark(id), where = ZONES[g.zone].name;
+    const status = !cur ? `Next job in ${tLeft(st.rep - Date.now())}` : st.active ? (qDone(id) ? '<b style="color:#5dff6a">Ready to turn in!</b>' : `In progress · ${qProgText(id)}`) : '<b style="color:#ffd23a">New quest available</b>';
+    return `<div class="shoprow"><div class="slot"><span class="pe2">${g.e}</span></div><div class="grow"><b>${esc(g.name)}</b> <span class="small dim">· ${esc(where)} · story ${Math.min(st.i, g.q.length)}/${g.q.length}</span><div class="small">${cur ? esc(qTitle(cur.q)) : ''}</div><div class="small">${status}</div></div><span class="qmark">${mark === '…' ? '' : mark || ''}</span></div>`;
+  }).join(''), true);
+  this.cur.live = true;
+};
+NPC_LINES.blackmarket = { btn: '🕶️ See the goods', intro: ['Psst. Over here. Name\'s Silas.', 'I get my hands on things you can\'t craft: relics, crystals, cores… for a price.', 'Stock changes every twenty minutes. Some days I\'ve got nothing at all.'], hi: ['Keep your voice down…', 'Fresh merchandise. Don\'t ask where it\'s from.', 'Coins first, questions never.'] };
+NPC_PANELS.blackmarket = function (n) {
+  UI.open(`${n.e} Black Market`, () => {
+    const s = bmStock(), left = BM_WINDOW - Date.now() % BM_WINDOW;
+    if (s.closed) return `<div class="empty">The stall is bare. Silas shrugs: <i>"Nothing today. Come back in ${tLeft(left)}."</i></div>`;
+    return `<p class="dim small">Rare goods at steep prices. New stock in ${tLeft(left)}, and every islander sees the same deals.</p>` + s.offers.map(o => {
+      const it = ITEMS[o.id], rest = o.qty - bmBought(s.win, o.id);
+      return `<div class="shoprow"><div class="slot r${it.rar}" data-tip="id:${o.id}"><img src="${iconURL(o.id)}" alt=""></div><div class="grow"><span style="color:${RCOL[it.rar]}">${esc(it.name)}</span><div class="small dim">🪙 ${fmt(o.price)} · ${rest > 0 ? rest + ' left' : 'sold out'}</div></div><button class="btn sm" data-a="bmbuy" data-v="${o.id}" ${rest > 0 && G.P.coins >= o.price ? '' : 'disabled'}>Buy</button></div>`;
+    }).join('');
+  }, true);
+  UI.cur.live = true;
+};
+Object.assign(ACT, {
+  bmbuy(v) { const e = bmBuy(v); UI.toast(e || `Bought ${esc(ITEMS[v].name)}`, e ? '#ff6a6a' : '#5dff6a'); UI.refresh(); },
+  crystal(v) {
+    const c = G.P.inv[+v], s = G.P.inv[UI.pick.i]; if (!c || !s) return;
+    const cost = REFORGE_COST[instRar(s)] * 2; if (G.P.coins < cost) return;
+    G.P.coins -= cost; s.d.ref = ITEMS[c.id].crystal; c.n--; if (c.n <= 0) G.P.inv[+v] = null;
+    SFX.hatch(); burst(G.me.x, G.me.y - 0.5, ITEMS[c.id].icon.c, 30, 4, 5); UI.announce('Crystal socketed!', ITEMS[c.id].icon.c, esc(instName(s))); G.invDirty = true; UI.refresh();
   },
 });
