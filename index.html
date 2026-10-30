@@ -54,7 +54,8 @@ textarea { width: 100%; font-family: ui-monospace, Consolas, monospace; font-siz
 
 /* ------------------------------------------------------------- hud */
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
-#hud > * { position: absolute; }
+#hud > * { position: absolute; transition: opacity .4s; }
+#hud.cine > *, #mapwrap.cine { opacity: 0; pointer-events: none; }
 #hudTL { top: 12px; left: 12px; width: 250px; background: rgba(12,16,30,.72); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
 .hbar { position: relative; height: 18px; background: #2a1a22; border-radius: 6px; overflow: hidden; border: 1px solid rgba(0,0,0,.5); }
 .hbar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#ff6a6a, #d83a3a); transition: width .15s; }
@@ -104,6 +105,10 @@ textarea { width: 100%; font-family: ui-monospace, Consolas, monospace; font-siz
 .hs { position: relative; cursor: pointer; border-radius: 9px; }
 .hs.on .slot { border-color: #fff !important; box-shadow: 0 0 0 2px #fff, 0 0 14px rgba(255,255,255,.4); transform: translateY(-3px); }
 .hs i { position: absolute; top: 2px; left: 5px; font-style: normal; font-size: 10px; font-weight: 800; color: rgba(255,255,255,.55); pointer-events: none; }
+#abil { bottom: 14px; left: calc(50% + 290px); display: flex; gap: 5px; pointer-events: auto; }
+.ab { position: relative; width: 44px; height: 44px; border-radius: 10px; background: rgba(12,16,30,.78); border: 1px solid rgba(255,210,58,.4); display: flex; align-items: center; justify-content: center; font-size: 20px; overflow: hidden; }
+.ab span { font-size: 20px; } .ab i { position: absolute; left: 0; right: 0; top: 0; background: rgba(0,0,0,.6); } .ab b { position: absolute; bottom: 1px; left: 0; right: 0; text-align: center; font-size: 8px; color: var(--dim); }
+@media (max-width: 1150px) { #abil { left: auto; right: 64px; bottom: 84px; flex-direction: column; } }
 #hudBtns { bottom: 12px; right: 12px; display: flex; gap: 5px; pointer-events: auto; }
 #hudBtns button { width: 44px; height: 44px; border-radius: 10px; background: rgba(12,16,30,.78); border: 1px solid rgba(255,255,255,.18); font-size: 20px; cursor: pointer; position: relative; color: #fff; }
 #hudBtns button:hover { background: rgba(40,56,96,.9); }
@@ -131,6 +136,7 @@ textarea { width: 100%; font-family: ui-monospace, Consolas, monospace; font-siz
 .slot.faded { opacity: .35; } .slot.big { width: 72px; height: 72px; } .slot.big img { width: 56px; height: 56px; }
 .slot.trash { font-size: 22px; background: #3a1a22; border-color: #7a2a3a; }
 .pe2 { font-size: 30px; }
+.qmark { font-family: var(--display); font-size: 30px; color: var(--gold); text-shadow: 0 2px 0 #3a2600; width: 24px; text-align: center; }
 .ic { vertical-align: middle; }
 
 /* ------------------------------------------------------- panel */
@@ -324,10 +330,11 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   <div id="skillbar"></div>
   <div id="heldName"></div>
   <div id="hotbar"></div>
+  <div id="abil"><div id="abJump" class="ab" title="Jump (Space): hop over slams and shockwaves">⤒<span></span><i></i><b>Space</b></div><div id="abRoll" class="ab" title="Dodge roll (Shift): a quick dash you can't be hit during">💨<span></span><i></i><b>Shift</b></div><div id="abWeapon" class="ab" hidden><span>⚔️</span><i></i><b>RMB</b></div></div>
   <div id="chat"><div id="chatlog"></div><input id="chatin" maxlength="160" placeholder="Say something… (Enter to send)" autocomplete="off"></div>
   <div id="hudBtns">
     <button data-k="inv" title="Inventory (E)">🎒<b>E</b></button><button data-k="craft" title="Crafting (C)">🛠️<b>C</b></button><button data-k="skills" title="Skills (K)">📊<b>K</b></button>
-    <button data-k="pets" title="Pets (P)">🐾<b>P</b></button><button data-k="map" title="Warp map (M)">🗺️<b>M</b></button><button data-k="coop" id="mpBtn" title="Play with friends (O)">🤝<b>O</b></button><button data-k="menu" title="Menu (Esc)">☰</button>
+    <button data-k="pets" title="Pets (P)">🐾<b>P</b></button><button data-k="quests" title="Quest log (L)">📜<b>L</b></button><button data-k="map" title="Warp map (M)">🗺️<b>M</b></button><button data-k="coop" id="mpBtn" title="Play with friends (O)">🤝<b>O</b></button><button data-k="menu" title="Menu (Esc)">☰</button>
   </div>
 </div>
 
@@ -340,6 +347,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 <script charset="utf-8" src="js/data.js"></script>
 <script charset="utf-8" src="js/icons.js"></script>
 <script charset="utf-8" src="js/world.js"></script>
+<script charset="utf-8" src="js/fx.js"></script>
 <script charset="utf-8" src="js/economy.js"></script>
 <script charset="utf-8" src="js/ui.js"></script>
 <script charset="utf-8" src="js/net.js"></script>
