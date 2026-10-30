@@ -335,6 +335,10 @@ function genFishing(key) {
 function generateZone(key) {
   const z = generateZoneRaw(key);
   if (z.dark == null && z.def.dark) z.dark = z.def.dark;
+  // quest givers (and the black market) stand at fixed spots or next to the island's arrival point
+  const spots = Object.entries(QUESTGIVERS).filter(([, g]) => g.zone === z.base).map(([id, g]) => [id, g.at ? g.at : [Math.floor(z.spawn.x) + g.rel[0], Math.floor(z.spawn.y) + g.rel[1]]]);
+  if (z.base === 'hub') spots.push(['blackmarket', [23, 57]]);
+  for (const [id, [x, y]] of spots) { const p = nearestFree(z, x + 0.5, y + 0.5, 4); z.set(Math.floor(p.x), Math.floor(p.y), { k: 'npc', id }); }
   if (['combat', 'fishing', 'farming', 'mining', 'foraging'].includes(z.def.cat)) z.safeR = 7;
   return z;
 }
